@@ -30,6 +30,15 @@
     <string name="search_placeholder">ගම්මාන, නිවාස නවාතැන් සොයන්න&#8230;</string>
     <string name="preview_badge_label">ආකෘති පෙරදසුන</string>
 
+    <!-- Plans Screen -->
+    <string name="title_community_plans">ප්‍රජාව විසින් ප්‍රකාශිත සංචාරක සැලසුම්</string>
+    <string name="btn_publish_plan">ප්‍රකාශයට පත් කරන්න</string>
+    <string name="btn_unpublish_plan">ප්‍රකාශනය ඉවත් කරන්න</string>
+    <string name="btn_copy_plan">මගේ සැලසුම් වලට පිටපත් කරන්න</string>
+    <string name="btn_share_itinerary">බෙදා ගන්න</string>
+    <string name="public_plan_published_by">ප්‍රකාශනය: %s</string>
+    <string name="public_plan_copied_msg">ඔබගේ පෞද්ගලික සංචාරක සැලසුම් වෙත පිටපත් කරන ලදී!</string>
+
     <!-- Profile Screen -->
     <string name="profile_title">ගිණුම සහ සැකසුම්</string>
     <string name="profile_guest_name">ආයුබෝවන්, සංචාරකය</string>

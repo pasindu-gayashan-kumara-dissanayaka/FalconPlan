@@ -50,12 +50,19 @@
     <string name="community_subtitle">Authentic perspectives, recipes, and heritage stories directly from local villagers.</string>
     <string name="community_empty_heading">Community Hub</string>
     <string name="community_empty_desc">Share your stories, read authentic local host posts, and engage with rural Sri Lankan tourism initiatives.</string>
+    <string name="title_community_plans">Community Published Itineraries</string>
 
     <!-- Plans Screen -->
     <string name="plans_title">My Travel Plans</string>
     <string name="plans_subtitle">Organize your booked homestays and community tour itineraries.</string>
     <string name="plans_empty_heading">No Saved Plans Yet</string>
     <string name="plans_empty_desc">When you save homestays or create custom village travel plans, they will appear here.</string>
+    <string name="btn_publish_plan">Publish</string>
+    <string name="btn_unpublish_plan">Unpublish</string>
+    <string name="btn_copy_plan">Copy to My Private Plans</string>
+    <string name="btn_share_itinerary">Share Itinerary</string>
+    <string name="public_plan_published_by">Published by %s</string>
+    <string name="public_plan_copied_msg">Copied to your private Travel Plans!</string>
 
     <!-- Profile & Settings Screen -->
     <string name="profile_title">Profile &amp; Settings</string>

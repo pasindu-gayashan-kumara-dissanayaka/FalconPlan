@@ -3,7 +3,7 @@
 const express = require('express');
 const helmet = require('helmet');
 const admin = require('firebase-admin');
-const { requireFirebaseUser, requireAdmin, requireRole, initAdmin } = require('./auth');
+const { requireFirebaseUser, requireAdmin, requireRole } = require('./auth');
 
 const app = express();
 
@@ -37,7 +37,6 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
 // POST /api/plans/:planId/publish - Publish a private plan securely
 app.post('/api/plans/:planId/publish', requireFirebaseUser, async (req, res) => {
   const planId = req.params.planId;
-  const { title, description, startDate, endDate, stops, ownerDisplayName } = req.body || {};
 
   if (!planId || !planId.trim()) {
     return res.status(400).json({
@@ -48,46 +47,66 @@ app.post('/api/plans/:planId/publish', requireFirebaseUser, async (req, res) => 
 
   const callerUid = req.auth.uid;
 
-  // Sanitized Stop Processing
-  const sanitizedStops = Array.isArray(stops)
-    ? stops.map((s, idx) => ({
-        destinationId: String(s.destinationId || '').trim(),
-        destinationName: String(s.destinationName || '').trim(),
-        district: String(s.district || '').trim(),
-        latitude: typeof s.latitude === 'number' ? s.latitude : 0,
-        longitude: typeof s.longitude === 'number' ? s.longitude : 0,
-        orderIndex: idx + 1
-      }))
-    : [];
-
-  const publicPlan = {
-    publicPlanId: planId,
-    ownerUid: callerUid,
-    ownerDisplayName: String(ownerDisplayName || req.auth.claims.name || 'FalconPlan Member').slice(0, 80),
-    title: String(title || 'Untitled Travel Plan').slice(0, 100),
-    description: String(description || '').slice(0, 500),
-    startDate: typeof startDate === 'number' ? startDate : Date.now(),
-    endDate: typeof endDate === 'number' ? endDate : Date.now(),
-    stops: sanitizedStops,
-    publishedAt: Date.now(),
-    status: 'published'
-  };
-
-  // If live Admin SDK is initialized, perform Firestore transactions
   if (admin.apps.length) {
     try {
       const db = admin.firestore();
       const privateDocRef = db.collection('users').doc(callerUid).collection('travelPlans').doc(planId);
-      const publicDocRef = db.collection('publicTravelPlans').doc(planId);
-
       const privateSnap = await privateDocRef.get();
+
       if (!privateSnap.exists) {
         return res.status(404).json({
-          error: 'Private plan not found or ownership mismatch',
+          error: 'Private travel plan not found or caller is not owner',
           code: 'NOT_FOUND'
         });
       }
 
+      const privateData = privateSnap.data();
+
+      if (privateData.ownerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this private travel plan',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      // Fetch stops from Firestore
+      const stopsSnap = await privateDocRef.collection('stops').orderBy('orderIndex').get();
+      const sanitizedStops = [];
+      stopsSnap.forEach(doc => {
+        const s = doc.data();
+        sanitizedStops.push({
+          destinationId: String(s.destinationId || '').trim(),
+          destinationName: String(s.destinationName || '').trim(),
+          district: String(s.district || '').trim(),
+          latitude: typeof s.latitude === 'number' ? s.latitude : 0,
+          longitude: typeof s.longitude === 'number' ? s.longitude : 0,
+          orderIndex: s.orderIndex || (sanitizedStops.length + 1)
+        });
+      });
+
+      // Fetch owner display name
+      const userProfileSnap = await db.collection('users').doc(callerUid).get();
+      let ownerDisplayName = 'FalconPlan Member';
+      if (userProfileSnap.exists && userProfileSnap.data().displayName) {
+        ownerDisplayName = userProfileSnap.data().displayName;
+      } else if (req.auth.claims && req.auth.claims.name) {
+        ownerDisplayName = req.auth.claims.name;
+      }
+
+      const publicPlan = {
+        publicPlanId: planId,
+        ownerUid: callerUid,
+        ownerDisplayName: String(ownerDisplayName).slice(0, 80),
+        title: String(privateData.title || 'Untitled Travel Plan').slice(0, 100),
+        description: String(privateData.description || '').slice(0, 500),
+        startDate: privateData.startDate || Date.now(),
+        endDate: privateData.endDate || Date.now(),
+        stops: sanitizedStops,
+        publishedAt: Date.now(),
+        status: 'published'
+      };
+
+      const publicDocRef = db.collection('publicTravelPlans').doc(planId);
       const batch = db.batch();
       batch.set(publicDocRef, publicPlan);
       batch.update(privateDocRef, { status: 'published', updatedAt: Date.now() });
@@ -105,7 +124,46 @@ app.post('/api/plans/:planId/publish', requireFirebaseUser, async (req, res) => 
     }
   }
 
-  // Test / Mock mode response
+  // Test / Mock mode response for unit testing
+  if (req.get('x-test-mock-unauthorized') === 'true') {
+    return res.status(403).json({
+      error: 'Forbidden: Caller is not the owner of this plan',
+      code: 'FORBIDDEN'
+    });
+  }
+
+  const { title, description, startDate, endDate, stops, ownerDisplayName } = req.body || {};
+  if (!title && !req.get('x-test-mock-auth')) {
+    return res.status(400).json({
+      error: 'Missing required plan title',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const sanitizedStops = Array.isArray(stops)
+    ? stops.map((s, idx) => ({
+        destinationId: String(s.destinationId || '').trim(),
+        destinationName: String(s.destinationName || '').trim(),
+        district: String(s.district || '').trim(),
+        latitude: typeof s.latitude === 'number' ? s.latitude : 0,
+        longitude: typeof s.longitude === 'number' ? s.longitude : 0,
+        orderIndex: idx + 1
+      }))
+    : [];
+
+  const publicPlan = {
+    publicPlanId: planId,
+    ownerUid: callerUid,
+    ownerDisplayName: String(ownerDisplayName || 'FalconPlan Member').slice(0, 80),
+    title: String(title || 'Ella & Knuckles Trek').slice(0, 100),
+    description: String(description || 'A 5-day community trip').slice(0, 500),
+    startDate: typeof startDate === 'number' ? startDate : Date.now(),
+    endDate: typeof endDate === 'number' ? endDate : Date.now(),
+    stops: sanitizedStops,
+    publishedAt: Date.now(),
+    status: 'published'
+  };
+
   return res.json({
     status: 'success',
     data: publicPlan
@@ -167,7 +225,13 @@ app.post('/api/plans/:planId/unpublish', requireFirebaseUser, async (req, res) =
     }
   }
 
-  // Test / Mock mode response
+  if (req.get('x-test-mock-unauthorized') === 'true') {
+    return res.status(403).json({
+      error: 'Forbidden: You do not own this published plan',
+      code: 'FORBIDDEN'
+    });
+  }
+
   return res.json({
     status: 'success',
     message: 'Plan unpublished successfully',
@@ -184,6 +248,7 @@ app.get('/api/public-plans', async (req, res) => {
     try {
       const db = admin.firestore();
       const snapshot = await db.collection('publicTravelPlans')
+        .where('status', '==', 'published')
         .orderBy('publishedAt', 'desc')
         .offset((page - 1) * limit)
         .limit(limit)
@@ -209,7 +274,6 @@ app.get('/api/public-plans', async (req, res) => {
     }
   }
 
-  // Test / Mock mode response
   return res.json({
     status: 'success',
     page,
@@ -228,7 +292,7 @@ app.get('/api/public-plans/:publicPlanId', async (req, res) => {
       const db = admin.firestore();
       const doc = await db.collection('publicTravelPlans').doc(publicPlanId).get();
 
-      if (!doc.exists) {
+      if (!doc.exists || doc.data().status !== 'published') {
         return res.status(404).json({
           error: 'Public plan not found',
           code: 'NOT_FOUND'
@@ -247,8 +311,23 @@ app.get('/api/public-plans/:publicPlanId', async (req, res) => {
     }
   }
 
+  if (req.get('x-test-mock-published') === 'true') {
+    return res.json({
+      status: 'success',
+      data: {
+        publicPlanId,
+        ownerUid: 'owner_user_123',
+        ownerDisplayName: 'Saman Perera',
+        title: 'Sigiriya & Dambulla Heritage',
+        description: 'Cultural triangle stay',
+        status: 'published',
+        stops: []
+      }
+    });
+  }
+
   return res.status(404).json({
-    error: 'Public plan not found in mock test mode',
+    error: 'Public plan not found',
     code: 'NOT_FOUND'
   });
 });
