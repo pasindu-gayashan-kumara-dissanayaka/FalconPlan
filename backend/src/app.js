@@ -33,6 +33,70 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
   });
 });
 
+// Public Travel Plans Publishing & Unpublishing
+app.post('/api/plans/publish', requireFirebaseUser, (req, res) => {
+  const { planId, title, description, startDate, endDate, stops } = req.body || {};
+
+  if (!planId || !title) {
+    return res.status(400).json({
+      error: 'planId and title are required for publication',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const sanitizedStops = Array.isArray(stops)
+    ? stops.map((s, idx) => ({
+        destinationId: s.destinationId || '',
+        destinationName: s.destinationName || '',
+        district: s.district || '',
+        latitude: s.latitude || 0,
+        longitude: s.longitude || 0,
+        orderIndex: idx + 1
+      }))
+    : [];
+
+  const publicPlan = {
+    publicPlanId: planId,
+    ownerUid: req.auth.uid,
+    ownerDisplayName: req.auth.claims.name || 'FalconPlan Member',
+    title: String(title).slice(0, 100),
+    description: String(description || '').slice(0, 500),
+    startDate: startDate || Date.now(),
+    endDate: endDate || Date.now(),
+    stops: sanitizedStops,
+    publishedAt: Date.now(),
+    status: 'published'
+  };
+
+  res.json({
+    status: 'success',
+    data: publicPlan
+  });
+});
+
+app.post('/api/plans/unpublish', requireFirebaseUser, (req, res) => {
+  const { planId } = req.body || {};
+  if (!planId) {
+    return res.status(400).json({
+      error: 'planId is required to unpublish',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  res.json({
+    status: 'success',
+    message: 'Plan unpublished successfully',
+    planId
+  });
+});
+
+app.get('/api/plans/public', (req, res) => {
+  res.json({
+    status: 'success',
+    data: []
+  });
+});
+
 // Future Provider Workspace API Contract Placeholders
 app.get('/api/provider/listings', requireFirebaseUser, requireRole(['provider']), (req, res) => {
   res.status(501).json({

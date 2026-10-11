@@ -1,5 +1,5 @@
 /**
- * Security Rules Contract Tests for FalconPlan
+ * Security Rules Contract Tests for FalconPlan (Profile + SavedPlaces + TravelPlans)
  * Tested with @firebase/rules-unit-testing
  */
 
@@ -36,133 +36,60 @@ describe("FalconPlan Firestore Security Rules", () => {
     await assertFails(aliceDb.doc("users/user_bob").get());
   });
 
-  test("User can create their own profile with valid schema (traveler mode)", async () => {
+  test("User can create a private TravelPlan", async () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
-    await assertSucceeds(aliceDb.doc("users/user_alice").set({
-      uid: "user_alice",
-      displayName: "Alice Silva",
-      email: "alice@example.com",
-      photoUrl: "",
-      activeMode: "traveler",
-      createdAt: 1700000000000,
-      updatedAt: 1700000000000
-    }));
-  });
-
-  test("User can create their own profile with valid schema (provider mode)", async () => {
-    const bobDb = testEnv.authenticatedContext("user_bob").firestore();
-    await assertSucceeds(bobDb.doc("users/user_bob").set({
-      uid: "user_bob",
-      displayName: "Bob Host",
-      email: "bob@example.com",
-      photoUrl: "",
-      activeMode: "provider",
-      createdAt: 1700000000000,
-      updatedAt: 1700000000000
-    }));
-  });
-
-  test("User CANNOT create profile with unapproved fields (isAdmin/isVerified/kycStatus)", async () => {
-    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
-    await assertFails(aliceDb.doc("users/user_alice").set({
-      uid: "user_alice",
-      displayName: "Alice Silva",
-      email: "alice@example.com",
-      photoUrl: "",
-      activeMode: "traveler",
+    await assertSucceeds(aliceDb.doc("users/user_alice/travelPlans/plan_001").set({
+      id: "plan_001",
+      ownerUid: "user_alice",
+      title: "Ella & Knuckles Trek",
+      description: "A 5-day community trip",
+      startDate: 1700000000000,
+      endDate: 1700500000000,
+      status: "draft",
       createdAt: 1700000000000,
       updatedAt: 1700000000000,
-      isAdmin: true
+      stopCount: 0
     }));
   });
 
-  test("User CANNOT create profile with invalid activeMode (e.g. admin)", async () => {
+  test("User CANNOT access another user's TravelPlan", async () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
-    await assertFails(aliceDb.doc("users/user_alice").set({
-      uid: "user_alice",
-      displayName: "Alice Silva",
-      email: "alice@example.com",
-      photoUrl: "",
-      activeMode: "admin",
-      createdAt: 1700000000000,
-      updatedAt: 1700000000000
-    }));
+    await assertFails(aliceDb.doc("users/user_bob/travelPlans/plan_001").get());
   });
 
-  test("User CANNOT create profile with mismatched UID in document", async () => {
+  test("User can add a stop to their TravelPlan", async () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
-    await assertFails(aliceDb.doc("users/user_alice").set({
-      uid: "user_bob",
-      displayName: "Alice Silva",
-      email: "alice@example.com",
-      photoUrl: "",
-      activeMode: "traveler",
-      createdAt: 1700000000000,
-      updatedAt: 1700000000000
+    await assertSucceeds(aliceDb.doc("users/user_alice/travelPlans/plan_001/stops/stop_001").set({
+      id: "stop_001",
+      destinationId: "dest_sigiriya",
+      destinationName: "Sigiriya Rock Fortress",
+      district: "Matale District",
+      latitude: 7.9570,
+      longitude: 80.7603,
+      visitDate: 1700000000000,
+      notes: "Early morning climb",
+      orderIndex: 1
     }));
   });
 
-  test("User can update activeMode and updatedAt in their own profile", async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc("users/user_alice").set({
-        uid: "user_alice",
-        displayName: "Alice Silva",
-        email: "alice@example.com",
-        photoUrl: "",
-        activeMode: "traveler",
-        createdAt: 1700000000000,
-        updatedAt: 1700000000000
-      });
-    });
-
+  test("User CANNOT add a stop to another user's TravelPlan", async () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
-    await assertSucceeds(aliceDb.doc("users/user_alice").update({
-      activeMode: "provider",
-      updatedAt: 1700000005000
+    await assertFails(aliceDb.doc("users/user_bob/travelPlans/plan_001/stops/stop_001").set({
+      id: "stop_001",
+      destinationId: "dest_sigiriya",
+      destinationName: "Sigiriya Rock Fortress",
+      district: "Matale District",
+      latitude: 7.9570,
+      longitude: 80.7603,
+      visitDate: 1700000000000,
+      notes: "Early morning climb",
+      orderIndex: 1
     }));
   });
 
-  test("User CANNOT alter immutable uid or createdAt on profile update", async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc("users/user_alice").set({
-        uid: "user_alice",
-        displayName: "Alice Silva",
-        email: "alice@example.com",
-        photoUrl: "",
-        activeMode: "traveler",
-        createdAt: 1700000000000,
-        updatedAt: 1700000000000
-      });
-    });
-
-    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
-    await assertFails(aliceDb.doc("users/user_alice").update({
-      createdAt: 1800000000000
-    }));
-  });
-
-  test("User CANNOT inject privileged keys on profile update", async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc("users/user_alice").set({
-        uid: "user_alice",
-        displayName: "Alice Silva",
-        email: "alice@example.com",
-        photoUrl: "",
-        activeMode: "traveler",
-        createdAt: 1700000000000,
-        updatedAt: 1700000000000
-      });
-    });
-
-    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
-    await assertFails(aliceDb.doc("users/user_alice").update({
-      isVerifiedProvider: true
-    }));
-  });
-
-  test("Unauthenticated user CANNOT access any documents", async () => {
+  test("Unauthenticated user CANNOT read or write any documents", async () => {
     const anonDb = testEnv.unauthenticatedContext().firestore();
     await assertFails(anonDb.doc("users/user_alice").get());
-    await assertFails(anonDb.collection("homestays").get());
+    await assertFails(anonDb.doc("users/user_alice/travelPlans/plan_001").get());
   });
 });

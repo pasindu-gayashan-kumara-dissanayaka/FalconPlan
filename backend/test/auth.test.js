@@ -77,6 +77,51 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  test('POST /api/plans/publish publishes sanitized public plan', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      planId: 'plan_123',
+      title: 'Ella & Knuckles Community Trek',
+      description: 'A 5-day village stay',
+      stops: [{ destinationId: 'dest_sigiriya', destinationName: 'Sigiriya', latitude: 7.957, longitude: 80.76 }]
+    });
+
+    const res = await makeRequest('/api/plans/publish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'user_falcon_789'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.publicPlanId, 'plan_123');
+    assert.equal(res.json.data.ownerUid, 'user_falcon_789');
+    assert.equal(res.json.data.status, 'published');
+  });
+
+  test('POST /api/plans/unpublish unpublishes public plan', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ planId: 'plan_123' });
+
+    const res = await makeRequest('/api/plans/unpublish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'user_falcon_789'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.planId, 'plan_123');
+  });
+
   test('POST /api/me with oversized payload returns 413 Payload Too Large', async () => {
     const largeBody = JSON.stringify({ data: 'a'.repeat(70000) });
     const res = await makeRequest('/api/me', {
