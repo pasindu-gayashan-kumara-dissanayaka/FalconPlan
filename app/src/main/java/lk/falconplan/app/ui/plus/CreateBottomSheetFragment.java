@@ -11,7 +11,9 @@ import androidx.annotation.Nullable;
 
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
+import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
+import lk.falconplan.app.ui.plans.CreatePlanFragment;
 
 public class CreateBottomSheetFragment extends BottomSheetDialogFragment {
 
@@ -38,7 +40,14 @@ public class CreateBottomSheetFragment extends BottomSheetDialogFragment {
         super.onViewCreated(view, savedInstanceState);
 
         view.findViewById(R.id.cardOptionStory).setOnClickListener(v -> showPlaceholderToast(getString(R.string.plus_sheet_story)));
-        view.findViewById(R.id.cardOptionTravelPlan).setOnClickListener(v -> showPlaceholderToast(getString(R.string.plus_sheet_travel_plan)));
+
+        view.findViewById(R.id.cardOptionTravelPlan).setOnClickListener(v -> {
+            dismiss();
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).loadAuthFragment(new CreatePlanFragment(), true);
+            }
+        });
+
         view.findViewById(R.id.cardOptionPost).setOnClickListener(v -> showPlaceholderToast(getString(R.string.plus_sheet_post)));
     }
 

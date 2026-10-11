@@ -63,6 +63,37 @@ service cloud.firestore {
 
         allow delete: if isOwner(userId);
       }
+
+      // Travel Plans Subcollection: users/{userId}/travelPlans/{planId}
+      match /travelPlans/{planId} {
+        allow read, delete: if isOwner(userId);
+
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['id', 'ownerUid', 'title', 'description', 'startDate', 'endDate', 'status', 'createdAt', 'updatedAt', 'stopCount'])
+          && request.resource.data.id is string
+          && request.resource.data.ownerUid == userId
+          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+          && request.resource.data.description is string && request.resource.data.description.size() <= 500
+          && (request.resource.data.status == 'draft' || request.resource.data.status == 'planned')
+          && request.resource.data.startDate is number
+          && request.resource.data.endDate is number;
+
+        // Travel Plan Stops Subcollection: users/{userId}/travelPlans/{planId}/stops/{stopId}
+        match /stops/{stopId} {
+          allow read, delete: if isOwner(userId);
+
+          allow create, update: if isOwner(userId)
+            && request.resource.data.keys().hasOnly(['id', 'destinationId', 'destinationName', 'district', 'latitude', 'longitude', 'visitDate', 'notes', 'orderIndex'])
+            && request.resource.data.id is string
+            && request.resource.data.destinationId is string
+            && request.resource.data.destinationName is string
+            && request.resource.data.district is string
+            && request.resource.data.latitude >= -90.0 && request.resource.data.latitude <= 90.0
+            && request.resource.data.longitude >= -180.0 && request.resource.data.longitude <= 180.0
+            && request.resource.data.notes is string
+            && request.resource.data.orderIndex is number;
+        }
+      }
     }
 
     // Deny read and write access to all other collections by default
