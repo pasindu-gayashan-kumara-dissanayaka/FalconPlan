@@ -11,23 +11,28 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 
-import java.util.Locale;
-
+import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
-import lk.falconplan.app.data.model.HomestayListing;
+import lk.falconplan.app.data.model.Destination;
+import lk.falconplan.app.data.model.SavedPlace;
+import lk.falconplan.app.data.repository.SavedPlacesRepository;
+import lk.falconplan.app.data.repository.SavedPlacesRepositoryImpl;
 
 public class ExploreFragment extends Fragment {
 
     private ExploreViewModel viewModel;
-    private HomestayAdapter adapter;
+    private HomestayAdapter homestayAdapter;
+    private DestinationAdapter destinationAdapter;
+    private SavedPlacesRepository savedPlacesRepository;
     private View layoutEmpty;
 
     public static ExploreFragment newInstance() {
@@ -46,27 +51,52 @@ public class ExploreFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         viewModel = new ViewModelProvider(this).get(ExploreViewModel.class);
+        savedPlacesRepository = new SavedPlacesRepositoryImpl();
 
         RecyclerView recyclerListings = view.findViewById(R.id.recyclerListings);
+        RecyclerView recyclerDestinations = view.findViewById(R.id.recyclerDestinations);
         layoutEmpty = view.findViewById(R.id.layoutEmpty);
         EditText editSearch = view.findViewById(R.id.editSearch);
         ChipGroup chipGroupCategories = view.findViewById(R.id.chipGroupCategories);
 
         recyclerListings.setLayoutManager(new LinearLayoutManager(requireContext()));
-        adapter = new HomestayAdapter();
-        recyclerListings.setAdapter(adapter);
+        homestayAdapter = new HomestayAdapter();
+        recyclerListings.setAdapter(homestayAdapter);
 
-        adapter.setOnListingClickListener(this::showListingDetailDialog);
+        recyclerDestinations.setLayoutManager(new LinearLayoutManager(requireContext()));
+        destinationAdapter = new DestinationAdapter();
+        recyclerDestinations.setAdapter(destinationAdapter);
+
+        destinationAdapter.setOnDestinationClickListener(new DestinationAdapter.OnDestinationClickListener() {
+            @Override
+            public void onDestinationClick(Destination destination) {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadAuthFragment(
+                            DestinationDetailFragment.newInstance(destination.getId()), true
+                    );
+                }
+            }
+
+            @Override
+            public void onFavoriteClick(Destination destination) {
+                saveDestinationToFirestore(destination);
+            }
+        });
+
+        view.findViewById(R.id.btnSavedPlaces).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).loadAuthFragment(new SavedPlacesFragment(), true);
+            }
+        });
 
         viewModel.getListingsLiveData().observe(getViewLifecycleOwner(), listings -> {
-            adapter.setListings(listings);
-            if (listings == null || listings.isEmpty()) {
-                layoutEmpty.setVisibility(View.VISIBLE);
-                recyclerListings.setVisibility(View.GONE);
-            } else {
-                layoutEmpty.setVisibility(View.GONE);
-                recyclerListings.setVisibility(View.VISIBLE);
-            }
+            homestayAdapter.setListings(listings);
+            updateEmptyState();
+        });
+
+        viewModel.getDestinationsLiveData().observe(getViewLifecycleOwner(), destinations -> {
+            destinationAdapter.setDestinations(destinations);
+            updateEmptyState();
         });
 
         editSearch.addTextChangedListener(new TextWatcher() {
@@ -85,40 +115,66 @@ public class ExploreFragment extends Fragment {
         chipGroupCategories.setOnCheckedStateChangeListener((group, checkedIds) -> {
             if (checkedIds.isEmpty()) return;
             int checkedId = checkedIds.get(0);
-            if (checkedId == R.id.chipHillCountry) {
-                viewModel.filterByCategory("Ella & Hill Country");
-            } else if (checkedId == R.id.chipCultural) {
-                viewModel.filterByCategory("Cultural Triangle");
-            } else if (checkedId == R.id.chipKnuckles) {
-                viewModel.filterByCategory("Knuckles Villages");
-            } else if (checkedId == R.id.chipRainforest) {
-                viewModel.filterByCategory("Sinharaja Edge");
+            if (checkedId == R.id.chipCultural) {
+                viewModel.filterByCategory("Cultural Heritage");
+            } else if (checkedId == R.id.chipVillages) {
+                viewModel.filterByCategory("Villages");
+            } else if (checkedId == R.id.chipMountains) {
+                viewModel.filterByCategory("Mountains");
+            } else if (checkedId == R.id.chipNature) {
+                viewModel.filterByCategory("Nature");
+            } else if (checkedId == R.id.chipBeaches) {
+                viewModel.filterByCategory("Beaches");
             } else {
                 viewModel.filterByCategory("All Regions");
             }
         });
 
         view.findViewById(R.id.btnFilter).setOnClickListener(v ->
-                Toast.makeText(requireContext(), "Filter options design preview", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "Search and category filters active.", Toast.LENGTH_SHORT).show()
         );
     }
 
-    private void showListingDetailDialog(HomestayListing listing) {
-        String msg = String.format(Locale.getDefault(),
-                "%s\n\nLocation: %s\nHost: %s (%s)\nPrice: LKR %,.0f / night\nRating: %.1f\n\nDescription:\n%s\n\n[Design Preview — Booking flow enabled in Phase 2]",
-                listing.getTitle(),
-                listing.getLocationName(),
-                listing.getHostName(),
-                listing.getHostRole(),
-                listing.getPriceLkrPerNight(),
-                listing.getRating(),
-                listing.getDescription()
+    private void updateEmptyState() {
+        boolean hasHomestays = homestayAdapter.getItemCount() > 0;
+        boolean hasDestinations = destinationAdapter.getItemCount() > 0;
+        if (!hasHomestays && !hasDestinations) {
+            layoutEmpty.setVisibility(View.VISIBLE);
+        } else {
+            layoutEmpty.setVisibility(View.GONE);
+        }
+    }
+
+    private void saveDestinationToFirestore(Destination destination) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(requireContext(), "Please sign in to save destinations.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        SavedPlace place = new SavedPlace(
+                destination.getId(),
+                destination.getId(),
+                destination.getName(),
+                destination.getDistrict(),
+                destination.getLatitude(),
+                destination.getLongitude(),
+                "",
+                now,
+                now
         );
 
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Design Preview: Homestay Listing")
-                .setMessage(msg)
-                .setPositiveButton("Close", (dialog, which) -> dialog.dismiss())
-                .show();
+        savedPlacesRepository.savePlace(user.getUid(), place, new SavedPlacesRepository.OperationCallback() {
+            @Override
+            public void onSuccess() {
+                Toast.makeText(requireContext(), "Saved " + destination.getName() + " to your places!", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                Toast.makeText(requireContext(), "Failed to save: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 }

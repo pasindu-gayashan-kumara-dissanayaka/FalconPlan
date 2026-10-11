@@ -7,29 +7,40 @@ import androidx.lifecycle.ViewModel;
 import java.util.ArrayList;
 import java.util.List;
 
+import lk.falconplan.app.data.model.Destination;
 import lk.falconplan.app.data.model.HomestayListing;
+import lk.falconplan.app.data.repository.DestinationRepository;
+import lk.falconplan.app.data.repository.DestinationRepositoryImpl;
 import lk.falconplan.app.data.repository.MockDataRepository;
 
 public class ExploreViewModel extends ViewModel {
 
     private final MutableLiveData<List<HomestayListing>> listingsLiveData = new MutableLiveData<>();
-    private final MockDataRepository repository;
-    private List<HomestayListing> allListings = new ArrayList<>();
+    private final MutableLiveData<List<Destination>> destinationsLiveData = new MutableLiveData<>();
 
+    private final MockDataRepository homestayRepository;
+    private final DestinationRepository destinationRepository;
+
+    private List<HomestayListing> allHomestays = new ArrayList<>();
     private String currentCategory = "All Regions";
     private String currentQuery = "";
 
     public ExploreViewModel() {
-        this.repository = MockDataRepository.getInstance();
-        loadListings();
+        this.homestayRepository = MockDataRepository.getInstance();
+        this.destinationRepository = DestinationRepositoryImpl.getInstance();
+        loadData();
     }
 
     public LiveData<List<HomestayListing>> getListingsLiveData() {
         return listingsLiveData;
     }
 
-    public void loadListings() {
-        allListings = repository.getFeaturedHomestays();
+    public LiveData<List<Destination>> getDestinationsLiveData() {
+        return destinationsLiveData;
+    }
+
+    public void loadData() {
+        allHomestays = homestayRepository.getFeaturedHomestays();
         applyFilters(currentCategory, currentQuery);
     }
 
@@ -45,10 +56,11 @@ public class ExploreViewModel extends ViewModel {
 
     private void applyFilters(String category, String query) {
         String lowerQuery = query.toLowerCase().trim();
-        boolean isAllCategories = category.equalsIgnoreCase("All Regions");
+        boolean isAllCategories = category.equalsIgnoreCase("All Regions") || category.equalsIgnoreCase("All");
 
-        List<HomestayListing> filtered = new ArrayList<>();
-        for (HomestayListing item : allListings) {
+        // Filter Homestays
+        List<HomestayListing> filteredHomestays = new ArrayList<>();
+        for (HomestayListing item : allHomestays) {
             boolean matchesCategory = isAllCategories || item.getRegionCategory().equalsIgnoreCase(category);
             boolean matchesQuery = lowerQuery.isEmpty()
                     || item.getTitle().toLowerCase().contains(lowerQuery)
@@ -57,9 +69,13 @@ public class ExploreViewModel extends ViewModel {
                     || item.getDescription().toLowerCase().contains(lowerQuery);
 
             if (matchesCategory && matchesQuery) {
-                filtered.add(item);
+                filteredHomestays.add(item);
             }
         }
-        listingsLiveData.setValue(filtered);
+        listingsLiveData.setValue(filteredHomestays);
+
+        // Filter Curated Geographical Destinations
+        List<Destination> filteredDestinations = destinationRepository.filterDestinations(lowerQuery, category);
+        destinationsLiveData.setValue(filteredDestinations);
     }
 }

@@ -17,22 +17,49 @@
         android:paddingTop="16dp"
         android:paddingBottom="12dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/explore_greeting"
-            android:textColor="@color/accent_orange_dark"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="@string/explore_heading"
-            android:textColor="@color/primary_dark"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/explore_greeting"
+                    android:textColor="@color/accent_orange_dark"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/explore_heading"
+                    android:textColor="@color/primary_dark"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Saved Places Shortcut Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSavedPlaces"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Saved Places"
+                android:textColor="@color/primary"
+                android:textSize="12sp"
+                app:cornerRadius="12dp"
+                app:icon="@drawable/ic_heart"
+                app:iconTint="@color/accent_orange" />
+        </LinearLayout>
 
         <!-- Search Bar Row -->
         <LinearLayout
@@ -89,7 +116,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Region Category Horizontal Scroll -->
+            <!-- Region & Category Horizontal Scroll -->
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -114,41 +141,87 @@
                         android:text="@string/cat_all" />
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/chipHillCountry"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/cat_hill_country" />
-
-                    <com.google.android.material.chip.Chip
                         android:id="@+id/chipCultural"
                         style="@style/Widget.Material3.Chip.Filter"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/cat_cultural" />
+                        android:text="Cultural Heritage" />
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/chipKnuckles"
+                        android:id="@+id/chipVillages"
                         style="@style/Widget.Material3.Chip.Filter"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/cat_knuckles" />
+                        android:text="Villages" />
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/chipRainforest"
+                        android:id="@+id/chipMountains"
                         style="@style/Widget.Material3.Chip.Filter"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/cat_rainforest" />
+                        android:text="Mountains" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipNature"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Nature" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipBeaches"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Beaches" />
                 </com.google.android.material.chip.ChipGroup>
             </HorizontalScrollView>
 
-            <!-- Section Title Row -->
+            <!-- Curated Destinations Section -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="20dp"
                 android:layout_marginTop="16dp"
+                android:layout_marginBottom="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sri Lankan Destinations"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge_preview"
+                    android:text="Curated Map"
+                    android:textColor="@color/badge_preview_text"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerDestinations"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false"
+                android:paddingHorizontal="20dp"
+                tools:itemCount="2"
+                tools:listitem="@layout/item_destination_card" />
+
+            <!-- Featured Homestays Section Title -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="20dp"
+                android:layout_marginTop="20dp"
                 android:layout_marginBottom="12dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -172,7 +245,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- Listings RecyclerView -->
+            <!-- Homestay Listings RecyclerView -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerListings"
                 android:layout_width="match_parent"
@@ -180,7 +253,7 @@
                 android:clipToPadding="false"
                 android:nestedScrollingEnabled="false"
                 android:paddingHorizontal="20dp"
-                tools:itemCount="3"
+                tools:itemCount="2"
                 tools:listitem="@layout/item_homestay_card" />
 
             <!-- Empty State View -->
