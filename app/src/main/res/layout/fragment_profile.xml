@@ -38,8 +38,128 @@
             android:orientation="vertical"
             android:paddingHorizontal="20dp">
 
+            <!-- Signed In Profile Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardSignedInProfile"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="@color/surface"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="2dp"
+                app:strokeColor="@color/border_subtle"
+                app:strokeWidth="1dp"
+                tools:visibility="visible">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:background="@drawable/bg_center_plus_button"
+                            android:contentDescription="@null"
+                            android:padding="12dp"
+                            android:src="@drawable/ic_nav_profile" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/txtUserName"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textColor="@color/text_primary"
+                                android:textSize="18sp"
+                                android:textStyle="bold"
+                                tools:text="Saman Perera" />
+
+                            <TextView
+                                android:id="@+id/txtUserEmail"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="13sp"
+                                tools:text="saman@example.com" />
+                        </LinearLayout>
+
+                        <!-- Email Verified Badge -->
+                        <TextView
+                            android:id="@+id/txtVerificationBadge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_badge_preview"
+                            android:textColor="@color/badge_preview_text"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            tools:text="Verified" />
+                    </LinearLayout>
+
+                    <!-- Active Mode Switcher -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="Account Active Role Mode:"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/toggleGroupMode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        app:singleSelection="true">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnModeTraveler"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Traveler" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnModeProvider"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Homestay Host" />
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSignOut"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="Sign Out"
+                        android:textColor="@color/accent_orange_dark"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/accent_orange" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Guest Profile Card -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardGuestProfile"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
@@ -64,10 +184,10 @@
                         <ImageView
                             android:layout_width="56dp"
                             android:layout_height="56dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_nav_profile"
                             android:background="@drawable/bg_center_plus_button"
-                            android:padding="12dp" />
+                            android:contentDescription="@null"
+                            android:padding="12dp"
+                            android:src="@drawable/ic_nav_profile" />
 
                         <LinearLayout
                             android:layout_width="0dp"
