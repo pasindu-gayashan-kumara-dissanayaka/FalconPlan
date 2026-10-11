@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_community"
+        android:icon="@drawable/ic_nav_community"
+        android:title="@string/nav_community" />
+
+    <item
+        android:id="@+id/nav_explore"
+        android:icon="@drawable/ic_nav_explore"
+        android:title="@string/nav_explore" />
+
+    <item
+        android:id="@+id/nav_plus"
+        android:icon="@drawable/ic_nav_plus"
+        android:title="@string/nav_plus" />
+
+    <item
+        android:id="@+id/nav_plans"
+        android:icon="@drawable/ic_nav_plans"
+        android:title="@string/nav_plans" />
+
+    <item
+        android:id="@+id/nav_profile"
+        android:icon="@drawable/ic_nav_profile"
+        android:title="@string/nav_profile" />
+</menu>
