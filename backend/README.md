@@ -1,0 +1,3 @@
+# FalconPlan Backend Starter — NOT PRODUCTION COMPLETE
+From Node 20+ command prompt: `npm install` and `npm start`; GET `http://localhost:3000/api/health` returns `{ "status":"ok", ... }`.
+`GET /api/me` requires Firebase bearer ID token and trusted server credentials. Without credentials responds 503—this is intentional, NOT fake success. No KYC, services, booking or payment endpoint has been implemented yet; use agent phases + independent API/auth tests before public deployment. Configure secrets only in private host environment or local files outside the repository. No database project credentials are included.
