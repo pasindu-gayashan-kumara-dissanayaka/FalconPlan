@@ -1,5 +1,7 @@
 package lk.falconplan.app.data.repository;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -12,6 +14,7 @@ import java.util.List;
 import lk.falconplan.app.data.model.PublicTravelPlan;
 import lk.falconplan.app.data.model.TravelPlan;
 import lk.falconplan.app.data.model.TravelPlanStop;
+import lk.falconplan.app.data.remote.BackendApiClient;
 
 public class TravelPlanRepositoryImpl implements TravelPlanRepository {
 
@@ -21,13 +24,16 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
     public static final String PUBLIC_TRAVEL_PLANS_COLLECTION = "publicTravelPlans";
 
     private final FirebaseFirestore db;
+    private final BackendApiClient apiClient;
 
     public TravelPlanRepositoryImpl() {
         this.db = FirebaseFirestore.getInstance();
+        this.apiClient = BackendApiClient.getInstance();
     }
 
     public TravelPlanRepositoryImpl(FirebaseFirestore db) {
         this.db = db;
+        this.apiClient = BackendApiClient.getInstance();
     }
 
     @Override
@@ -144,7 +150,6 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
                         batch.delete(doc.getReference());
                     }
                     batch.delete(planRef);
-                    // Also unpublish if it was published
                     batch.delete(db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(planId));
 
                     batch.commit()
@@ -308,35 +313,54 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
             return;
         }
 
-        long now = System.currentTimeMillis();
-        PublicTravelPlan publicPlan = new PublicTravelPlan(
-                plan.getId(),
-                uid,
-                ownerDisplayName != null ? ownerDisplayName : "FalconPlan Member",
-                plan.getTitle(),
-                plan.getDescription(),
-                plan.getStartDate(),
-                plan.getEndDate(),
-                now,
-                "published",
-                stops != null ? stops : new ArrayList<>()
-        );
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user != null) {
+            user.getIdToken(true).addOnCompleteListener(task -> {
+                String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+                apiClient.publishPlan(idToken, plan, stops, ownerDisplayName, new BackendApiClient.ApiCallback<PublicTravelPlan>() {
+                    @Override
+                    public void onSuccess(PublicTravelPlan result) {
+                        // Update private plan status
+                        db.collection(USERS_COLLECTION).document(uid)
+                                .collection(TRAVEL_PLANS_COLLECTION).document(plan.getId())
+                                .update("status", "published", "updatedAt", System.currentTimeMillis())
+                                .addOnCompleteListener(t -> {
+                                    if (callback != null) callback.onSuccess();
+                                });
+                    }
 
-        WriteBatch batch = db.batch();
-        DocumentReference publicRef = db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(plan.getId());
-        DocumentReference privateRef = db.collection(USERS_COLLECTION).document(uid)
-                .collection(TRAVEL_PLANS_COLLECTION).document(plan.getId());
+                    @Override
+                    public void onError(Exception exception) {
+                        // Direct Firestore transaction fallback if backend API fails or is unconfigured locally
+                        long now = System.currentTimeMillis();
+                        PublicTravelPlan publicPlan = new PublicTravelPlan(
+                                plan.getId(),
+                                uid,
+                                ownerDisplayName != null ? ownerDisplayName : "FalconPlan Member",
+                                plan.getTitle(),
+                                plan.getDescription(),
+                                plan.getStartDate(),
+                                plan.getEndDate(),
+                                now,
+                                "published",
+                                stops != null ? stops : new ArrayList<>()
+                        );
 
-        batch.set(publicRef, publicPlan.toMap());
-        batch.update(privateRef, "status", "published", "updatedAt", now);
+                        WriteBatch batch = db.batch();
+                        DocumentReference publicRef = db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(plan.getId());
+                        DocumentReference privateRef = db.collection(USERS_COLLECTION).document(uid)
+                                .collection(TRAVEL_PLANS_COLLECTION).document(plan.getId());
 
-        batch.commit()
-                .addOnSuccessListener(aVoid -> {
-                    if (callback != null) callback.onSuccess();
-                })
-                .addOnFailureListener(e -> {
-                    if (callback != null) callback.onError(e);
+                        batch.set(publicRef, publicPlan.toMap());
+                        batch.update(privateRef, "status", "published", "updatedAt", now);
+
+                        batch.commit()
+                                .addOnSuccessListener(aVoid -> { if (callback != null) callback.onSuccess(); })
+                                .addOnFailureListener(e -> { if (callback != null) callback.onError(e); });
+                    }
                 });
+            });
+        }
     }
 
     @Override
@@ -346,26 +370,62 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
             return;
         }
 
-        long now = System.currentTimeMillis();
-        WriteBatch batch = db.batch();
-        DocumentReference publicRef = db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(planId);
-        DocumentReference privateRef = db.collection(USERS_COLLECTION).document(uid)
-                .collection(TRAVEL_PLANS_COLLECTION).document(planId);
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user != null) {
+            user.getIdToken(true).addOnCompleteListener(task -> {
+                String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+                apiClient.unpublishPlan(idToken, planId, new BackendApiClient.ApiCallback<Void>() {
+                    @Override
+                    public void onSuccess(Void result) {
+                        db.collection(USERS_COLLECTION).document(uid)
+                                .collection(TRAVEL_PLANS_COLLECTION).document(planId)
+                                .update("status", TravelPlan.STATUS_DRAFT, "updatedAt", System.currentTimeMillis())
+                                .addOnCompleteListener(t -> {
+                                    if (callback != null) callback.onSuccess();
+                                });
+                    }
 
-        batch.delete(publicRef);
-        batch.update(privateRef, "status", TravelPlan.STATUS_DRAFT, "updatedAt", now);
+                    @Override
+                    public void onError(Exception exception) {
+                        // Direct Firestore transaction fallback
+                        long now = System.currentTimeMillis();
+                        WriteBatch batch = db.batch();
+                        DocumentReference publicRef = db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(planId);
+                        DocumentReference privateRef = db.collection(USERS_COLLECTION).document(uid)
+                                .collection(TRAVEL_PLANS_COLLECTION).document(planId);
 
-        batch.commit()
-                .addOnSuccessListener(aVoid -> {
-                    if (callback != null) callback.onSuccess();
-                })
-                .addOnFailureListener(e -> {
-                    if (callback != null) callback.onError(e);
+                        batch.delete(publicRef);
+                        batch.update(privateRef, "status", TravelPlan.STATUS_DRAFT, "updatedAt", now);
+
+                        batch.commit()
+                                .addOnSuccessListener(aVoid -> { if (callback != null) callback.onSuccess(); })
+                                .addOnFailureListener(e -> { if (callback != null) callback.onError(e); });
+                    }
                 });
+            });
+        }
     }
 
     @Override
     public void getPublicPlans(PublicPlansCallback callback) {
+        apiClient.getPublicPlans(1, 20, new BackendApiClient.ApiCallback<List<PublicTravelPlan>>() {
+            @Override
+            public void onSuccess(List<PublicTravelPlan> result) {
+                if (result != null && !result.isEmpty()) {
+                    if (callback != null) callback.onSuccess(result);
+                } else {
+                    fetchPublicPlansFromFirestore(callback);
+                }
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                fetchPublicPlansFromFirestore(callback);
+            }
+        });
+    }
+
+    private void fetchPublicPlansFromFirestore(PublicPlansCallback callback) {
         db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION)
                 .orderBy("publishedAt", Query.Direction.DESCENDING)
                 .get()
@@ -426,7 +486,7 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
                         origStop.getLatitude(),
                         origStop.getLongitude(),
                         origStop.getVisitDate(),
-                        "", // Clear original notes
+                        "", // Clear original private notes
                         i + 1
                 );
                 batch.set(stopRef, copiedStop.toMap());
