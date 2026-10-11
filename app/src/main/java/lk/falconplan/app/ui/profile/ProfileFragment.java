@@ -11,6 +11,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -20,10 +21,11 @@ import com.google.firebase.auth.FirebaseUser;
 import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
 import lk.falconplan.app.data.common.Resource;
-
 import lk.falconplan.app.data.model.UserProfile;
 import lk.falconplan.app.ui.auth.AuthEntryFragment;
 import lk.falconplan.app.ui.auth.AuthViewModel;
+import lk.falconplan.app.utils.AppPreferences;
+import lk.falconplan.app.utils.LocaleHelper;
 
 public class ProfileFragment extends Fragment {
 
@@ -31,6 +33,7 @@ public class ProfileFragment extends Fragment {
 
     private View cardSignedInProfile;
     private View cardGuestProfile;
+    private View cardProviderNotice;
     private TextView txtUserName;
     private TextView txtUserEmail;
     private TextView txtVerificationBadge;
@@ -55,6 +58,7 @@ public class ProfileFragment extends Fragment {
 
         cardSignedInProfile = view.findViewById(R.id.cardSignedInProfile);
         cardGuestProfile = view.findViewById(R.id.cardGuestProfile);
+        cardProviderNotice = view.findViewById(R.id.cardProviderNotice);
         txtUserName = view.findViewById(R.id.txtUserName);
         txtUserEmail = view.findViewById(R.id.txtUserEmail);
         txtVerificationBadge = view.findViewById(R.id.txtVerificationBadge);
@@ -66,10 +70,16 @@ public class ProfileFragment extends Fragment {
             }
         });
 
+        view.findViewById(R.id.btnEditProfile).setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).loadAuthFragment(new EditProfileFragment(), true);
+            }
+        });
+
         view.findViewById(R.id.btnSignOut).setOnClickListener(v -> {
             authViewModel.signOut();
             if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).loadAuthFragment(new AuthEntryFragment(), false);
+                ((MainActivity) getActivity()).showAuthEntryScreen();
             }
         });
 
@@ -77,19 +87,62 @@ public class ProfileFragment extends Fragment {
             if (!isChecked) return;
             String newMode = (checkedId == R.id.btnModeProvider) ? UserProfile.MODE_PROVIDER : UserProfile.MODE_TRAVELER;
             authViewModel.updateActiveMode(newMode);
+            cardProviderNotice.setVisibility(R.id.btnModeProvider == checkedId ? View.VISIBLE : View.GONE);
         });
 
-        RadioGroup radioGroupLanguage = view.findViewById(R.id.radioGroupLanguage);
-        radioGroupLanguage.setOnCheckedChangeListener((group, checkedId) -> {
-            String selectedLang = "English";
-            if (checkedId == R.id.radioLangSinhala) {
-                selectedLang = "Sinhala (සිංහල)";
-            } else if (checkedId == R.id.radioLangTamil) {
-                selectedLang = "Tamil (தமிழ்)";
+        // Initialize Appearance Selection
+        AppPreferences prefs = AppPreferences.getInstance(requireContext());
+        RadioGroup radioGroupTheme = view.findViewById(R.id.radioGroupTheme);
+        int currentTheme = prefs.getThemeMode();
+        if (currentTheme == AppCompatDelegate.MODE_NIGHT_YES) {
+            radioGroupTheme.check(R.id.radioThemeDark);
+        } else if (currentTheme == AppCompatDelegate.MODE_NIGHT_NO) {
+            radioGroupTheme.check(R.id.radioThemeLight);
+        } else {
+            radioGroupTheme.check(R.id.radioThemeSystem);
+        }
+
+        radioGroupTheme.setOnCheckedChangeListener((group, checkedId) -> {
+            int selectedThemeMode = AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
+            if (checkedId == R.id.radioThemeLight) {
+                selectedThemeMode = AppCompatDelegate.MODE_NIGHT_NO;
+            } else if (checkedId == R.id.radioThemeDark) {
+                selectedThemeMode = AppCompatDelegate.MODE_NIGHT_YES;
             }
-            Toast.makeText(requireContext(),
-                    getString(R.string.lang_switched_msg, selectedLang),
-                    Toast.LENGTH_SHORT).show();
+            prefs.setThemeMode(selectedThemeMode);
+            AppCompatDelegate.setDefaultNightMode(selectedThemeMode);
+        });
+
+        // Initialize Language Selection
+        RadioGroup radioGroupLanguage = view.findViewById(R.id.radioGroupLanguage);
+        String currentLang = prefs.getSelectedLanguage();
+        if ("si".equalsIgnoreCase(currentLang)) {
+            radioGroupLanguage.check(R.id.radioLangSinhala);
+        } else if ("ta".equalsIgnoreCase(currentLang)) {
+            radioGroupLanguage.check(R.id.radioLangTamil);
+        } else {
+            radioGroupLanguage.check(R.id.radioLangEnglish);
+        }
+
+        radioGroupLanguage.setOnCheckedChangeListener((group, checkedId) -> {
+            String selectedLang = "en";
+            String displayLang = "English";
+            if (checkedId == R.id.radioLangSinhala) {
+                selectedLang = "si";
+                displayLang = "Sinhala (සිංහල)";
+            } else if (checkedId == R.id.radioLangTamil) {
+                selectedLang = "ta";
+                displayLang = "Tamil (தமிழ்)";
+            }
+
+            if (!selectedLang.equalsIgnoreCase(prefs.getSelectedLanguage())) {
+                prefs.setSelectedLanguage(selectedLang);
+                LocaleHelper.applyLocale(requireContext(), selectedLang);
+                Toast.makeText(requireContext(),
+                        getString(R.string.lang_switched_msg, displayLang),
+                        Toast.LENGTH_SHORT).show();
+                requireActivity().recreate();
+            }
         });
 
         updateUiState();
@@ -100,8 +153,10 @@ public class ProfileFragment extends Fragment {
                 txtUserName.setText(profile.getDisplayName() != null ? profile.getDisplayName() : "FalconPlan Member");
                 if (UserProfile.MODE_PROVIDER.equals(profile.getActiveMode())) {
                     toggleGroupMode.check(R.id.btnModeProvider);
+                    cardProviderNotice.setVisibility(View.VISIBLE);
                 } else {
                     toggleGroupMode.check(R.id.btnModeTraveler);
+                    cardProviderNotice.setVisibility(View.GONE);
                 }
             }
         });
@@ -109,9 +164,12 @@ public class ProfileFragment extends Fragment {
 
     private void updateUiState() {
         FirebaseUser user = authViewModel.getCurrentUser();
+        View btnSignOut = requireView().findViewById(R.id.btnSignOut);
+
         if (user != null) {
             cardSignedInProfile.setVisibility(View.VISIBLE);
             cardGuestProfile.setVisibility(View.GONE);
+            btnSignOut.setVisibility(View.VISIBLE);
 
             txtUserName.setText(user.getDisplayName() != null && !user.getDisplayName().isEmpty() ? user.getDisplayName() : "FalconPlan User");
             txtUserEmail.setText(user.getEmail() != null ? user.getEmail() : "");
@@ -126,6 +184,7 @@ public class ProfileFragment extends Fragment {
         } else {
             cardSignedInProfile.setVisibility(View.GONE);
             cardGuestProfile.setVisibility(View.VISIBLE);
+            btnSignOut.setVisibility(View.GONE);
         }
     }
 }

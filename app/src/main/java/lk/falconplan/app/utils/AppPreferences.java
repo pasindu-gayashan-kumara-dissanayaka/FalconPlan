@@ -3,12 +3,15 @@ package lk.falconplan.app.utils;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import androidx.appcompat.app.AppCompatDelegate;
+
 public class AppPreferences {
 
     private static final String PREF_NAME = "falconplan_prefs";
     private static final String KEY_ONBOARDING_COMPLETED = "onboarding_completed";
     private static final String KEY_LANGUAGE_SELECTED = "language_selected";
     private static final String KEY_SELECTED_LANGUAGE = "selected_language";
+    private static final String KEY_THEME_MODE = "theme_mode";
 
     private static AppPreferences instance;
     private final SharedPreferences preferences;
@@ -49,5 +52,13 @@ public class AppPreferences {
                 .putString(KEY_SELECTED_LANGUAGE, langCode)
                 .putBoolean(KEY_LANGUAGE_SELECTED, true)
                 .apply();
+    }
+
+    public int getThemeMode() {
+        return preferences.getInt(KEY_THEME_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
+    }
+
+    public void setThemeMode(int themeMode) {
+        preferences.edit().putInt(KEY_THEME_MODE, themeMode).apply();
     }
 }
