@@ -11,6 +11,7 @@ import androidx.fragment.app.Fragment;
 
 import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
+import lk.falconplan.app.utils.AppPreferences;
 
 public class WelcomeFragment extends Fragment {
 
@@ -30,8 +31,9 @@ public class WelcomeFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         View.OnClickListener startListener = v -> {
+            AppPreferences.getInstance(requireContext()).setOnboardingCompleted(true);
             if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).navigateToMainContent();
+                ((MainActivity) getActivity()).checkSessionAndRoute();
             }
         };
 

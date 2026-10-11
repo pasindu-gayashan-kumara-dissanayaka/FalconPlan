@@ -1,5 +1,6 @@
 package lk.falconplan.app;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,10 +24,14 @@ import lk.falconplan.app.ui.auth.AuthViewModel;
 import lk.falconplan.app.ui.auth.EmailVerificationFragment;
 import lk.falconplan.app.ui.community.CommunityFragment;
 import lk.falconplan.app.ui.explore.ExploreFragment;
+import lk.falconplan.app.ui.language.LanguageSelectionFragment;
 import lk.falconplan.app.ui.plans.PlansFragment;
 import lk.falconplan.app.ui.plus.CreateBottomSheetFragment;
 import lk.falconplan.app.ui.profile.ProfileFragment;
+import lk.falconplan.app.ui.splash.SplashFragment;
 import lk.falconplan.app.ui.splash.WelcomeFragment;
+import lk.falconplan.app.utils.AppPreferences;
+import lk.falconplan.app.utils.LocaleHelper;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -34,6 +39,13 @@ public class MainActivity extends AppCompatActivity {
     private View fragmentContainer;
     private AuthViewModel authViewModel;
     private int currentSelectedTabId = -1;
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        AppPreferences prefs = AppPreferences.getInstance(newBase);
+        String lang = prefs.getSelectedLanguage();
+        super.attachBaseContext(LocaleHelper.applyLocale(newBase, lang));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,7 +68,9 @@ public class MainActivity extends AppCompatActivity {
         observeAuthState();
 
         if (savedInstanceState == null) {
-            checkSessionAndRoute();
+            // Display Splash Screen first on application startup
+            loadFragment(new SplashFragment(), false);
+            bottomNavigation.setVisibility(View.GONE);
         }
     }
 
@@ -70,6 +84,8 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     loadAuthFragment(new EmailVerificationFragment(), false);
                 }
+            } else if (resource.getStatus() == lk.falconplan.app.data.common.Resource.Status.ERROR) {
+                checkSessionAndRoute();
             }
         });
     }
@@ -86,6 +102,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void checkSessionAndRoute() {
         FirebaseUser currentUser = authViewModel.getCurrentUser();
+        AppPreferences prefs = AppPreferences.getInstance(this);
+
         if (currentUser != null) {
             if (currentUser.isEmailVerified() || isGoogleUser(currentUser)) {
                 navigateToMainContent();
@@ -93,7 +111,13 @@ public class MainActivity extends AppCompatActivity {
                 loadAuthFragment(new EmailVerificationFragment(), false);
             }
         } else {
-            showWelcomeScreen();
+            if (!prefs.isOnboardingCompleted()) {
+                showWelcomeScreen();
+            } else if (!prefs.isLanguageSelected()) {
+                showLanguageSelectionScreen();
+            } else {
+                showAuthEntryScreen();
+            }
         }
     }
 
@@ -102,6 +126,20 @@ public class MainActivity extends AppCompatActivity {
         setContainerBottomMargin(0);
         currentSelectedTabId = -1;
         loadFragment(new WelcomeFragment(), false);
+    }
+
+    public void showLanguageSelectionScreen() {
+        bottomNavigation.setVisibility(View.GONE);
+        setContainerBottomMargin(0);
+        currentSelectedTabId = -1;
+        loadFragment(new LanguageSelectionFragment(), false);
+    }
+
+    public void showAuthEntryScreen() {
+        bottomNavigation.setVisibility(View.GONE);
+        setContainerBottomMargin(0);
+        currentSelectedTabId = -1;
+        loadFragment(new AuthEntryFragment(), false);
     }
 
     public void loadAuthFragment(Fragment fragment, boolean addToBackStack) {
@@ -122,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             Fragment currentFrag = getSupportFragmentManager().findFragmentById(R.id.fragmentContainer);
-            if (itemId == currentSelectedTabId && currentFrag != null && !(currentFrag instanceof WelcomeFragment)) {
+            if (itemId == currentSelectedTabId && currentFrag != null && !(currentFrag instanceof WelcomeFragment) && !(currentFrag instanceof AuthEntryFragment)) {
                 return true;
             }
 
@@ -150,9 +188,9 @@ public class MainActivity extends AppCompatActivity {
         getSupportFragmentManager().popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         bottomNavigation.setVisibility(View.VISIBLE);
         setContainerBottomMargin((int) (64 * getResources().getDisplayMetrics().density));
-        currentSelectedTabId = R.id.nav_explore;
-        bottomNavigation.setSelectedItemId(R.id.nav_explore);
-        loadFragment(new ExploreFragment(), false);
+        currentSelectedTabId = R.id.nav_community;
+        bottomNavigation.setSelectedItemId(R.id.nav_community);
+        loadFragment(new CommunityFragment(), false);
     }
 
     public void switchToTab(@IdRes int tabId) {
