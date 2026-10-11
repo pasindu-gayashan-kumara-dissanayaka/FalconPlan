@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -45,6 +46,8 @@ public class PlanDetailFragment extends Fragment implements PlanStopAdapter.OnSt
     private TextView txtPlanTitle;
     private TextView txtPlanDates;
     private TextView txtPlanDescription;
+    private TextView txtStatusBadge;
+    private Button btnPublishToggle;
     private RecyclerView recyclerStops;
     private View layoutEmpty;
     private ProgressBar progressBar;
@@ -75,6 +78,8 @@ public class PlanDetailFragment extends Fragment implements PlanStopAdapter.OnSt
         txtPlanTitle = view.findViewById(R.id.txtPlanTitle);
         txtPlanDates = view.findViewById(R.id.txtPlanDates);
         txtPlanDescription = view.findViewById(R.id.txtPlanDescription);
+        txtStatusBadge = view.findViewById(R.id.txtStatusBadge);
+        btnPublishToggle = view.findViewById(R.id.btnPublishToggle);
         recyclerStops = view.findViewById(R.id.recyclerStops);
         layoutEmpty = view.findViewById(R.id.layoutEmpty);
         progressBar = view.findViewById(R.id.progressBar);
@@ -82,6 +87,8 @@ public class PlanDetailFragment extends Fragment implements PlanStopAdapter.OnSt
         view.findViewById(R.id.btnBack).setOnClickListener(v -> requireActivity().getOnBackPressedDispatcher().onBackPressed());
         view.findViewById(R.id.btnDeletePlan).setOnClickListener(v -> confirmDeletePlan());
         view.findViewById(R.id.btnAddStop).setOnClickListener(v -> showAddDestinationPicker());
+
+        btnPublishToggle.setOnClickListener(v -> togglePublishState());
 
         recyclerStops.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new PlanStopAdapter();
@@ -112,6 +119,14 @@ public class PlanDetailFragment extends Fragment implements PlanStopAdapter.OnSt
                 txtPlanDates.setText(String.format("%s – %s", sdf.format(new Date(plan.getStartDate())), sdf.format(new Date(plan.getEndDate()))));
                 txtPlanDescription.setText(plan.getDescription() != null && !plan.getDescription().isEmpty() ? plan.getDescription() : "No description.");
 
+                if ("published".equalsIgnoreCase(plan.getStatus())) {
+                    txtStatusBadge.setText("PUBLISHED");
+                    btnPublishToggle.setText("Unpublish");
+                } else {
+                    txtStatusBadge.setText("DRAFT");
+                    btnPublishToggle.setText("Publish");
+                }
+
                 loadStops(user.getUid(), plan.getId());
             }
 
@@ -121,6 +136,58 @@ public class PlanDetailFragment extends Fragment implements PlanStopAdapter.OnSt
                 Toast.makeText(requireContext(), "Failed to load plan: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void togglePublishState() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || currentPlan == null) return;
+
+        if ("published".equalsIgnoreCase(currentPlan.getStatus())) {
+            progressBar.setVisibility(View.VISIBLE);
+            travelPlanRepository.unpublishPlan(user.getUid(), currentPlan.getId(), new TravelPlanRepository.OperationCallback() {
+                @Override
+                public void onSuccess() {
+                    progressBar.setVisibility(View.GONE);
+                    currentPlan.setStatus(TravelPlan.STATUS_DRAFT);
+                    txtStatusBadge.setText("DRAFT");
+                    btnPublishToggle.setText("Publish");
+                    Toast.makeText(requireContext(), "Plan unpublished.", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(requireContext(), "Failed to unpublish: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        } else {
+            new AlertDialog.Builder(requireContext())
+                    .setTitle("Publish to FalconPlan Community")
+                    .setMessage("Publish this itinerary to the public FalconPlan community feed?")
+                    .setPositiveButton("Publish Plan", (dialog, which) -> {
+                        progressBar.setVisibility(View.VISIBLE);
+                        String displayName = user.getDisplayName() != null && !user.getDisplayName().isEmpty()
+                                ? user.getDisplayName() : "FalconPlan Member";
+                        travelPlanRepository.publishPlan(user.getUid(), currentPlan, adapter.getStops(), displayName, new TravelPlanRepository.OperationCallback() {
+                            @Override
+                            public void onSuccess() {
+                                progressBar.setVisibility(View.GONE);
+                                currentPlan.setStatus("published");
+                                txtStatusBadge.setText("PUBLISHED");
+                                btnPublishToggle.setText("Unpublish");
+                                Toast.makeText(requireContext(), "Published to FalconPlan Community!", Toast.LENGTH_SHORT).show();
+                            }
+
+                            @Override
+                            public void onError(Exception exception) {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(requireContext(), "Failed to publish: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    })
+                    .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                    .show();
+        }
     }
 
     private void loadStops(String uid, String planId) {

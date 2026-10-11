@@ -85,14 +85,32 @@
                     android:orientation="vertical"
                     android:padding="20dp">
 
-                    <TextView
-                        android:id="@+id/txtPlanDates"
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/primary"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        tools:text="Nov 15, 2026 – Nov 20, 2026" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/txtPlanDates"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:textColor="@color/primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            tools:text="Nov 15, 2026 – Nov 20, 2026" />
+
+                        <TextView
+                            android:id="@+id/txtStatusBadge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_badge_preview"
+                            android:text="Draft"
+                            android:textColor="@color/badge_preview_text"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/txtPlanDescription"
@@ -103,15 +121,38 @@
                         android:textSize="14sp"
                         tools:text="A 5-day community trek and homestay itinerary in the Knuckles Range." />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnAddStop"
+                    <!-- Action Row -->
+                    <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
+                        android:layout_height="wrap_content"
                         android:layout_marginTop="16dp"
-                        android:text="+ Add Destination to Plan"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        app:cornerRadius="12dp" />
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnAddStop"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:text="+ Destination"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="12dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPublishToggle"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="4dp"
+                            android:layout_weight="1"
+                            android:text="Publish"
+                            android:textColor="@color/accent_orange_dark"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="12dp"
+                            app:strokeColor="@color/accent_orange" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -165,7 +206,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:gravity="center"
-                    android:text="Tap '+ Add Destination' above or browse Explore destinations to build your itinerary."
+                    android:text="Tap '+ Destination' above or browse Explore destinations to build your itinerary."
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
             </LinearLayout>

@@ -9,6 +9,7 @@ import com.google.firebase.firestore.WriteBatch;
 import java.util.ArrayList;
 import java.util.List;
 
+import lk.falconplan.app.data.model.PublicTravelPlan;
 import lk.falconplan.app.data.model.TravelPlan;
 import lk.falconplan.app.data.model.TravelPlanStop;
 
@@ -17,6 +18,7 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
     public static final String USERS_COLLECTION = "users";
     public static final String TRAVEL_PLANS_COLLECTION = "travelPlans";
     public static final String STOPS_COLLECTION = "stops";
+    public static final String PUBLIC_TRAVEL_PLANS_COLLECTION = "publicTravelPlans";
 
     private final FirebaseFirestore db;
 
@@ -142,6 +144,9 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
                         batch.delete(doc.getReference());
                     }
                     batch.delete(planRef);
+                    // Also unpublish if it was published
+                    batch.delete(db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(planId));
+
                     batch.commit()
                             .addOnSuccessListener(aVoid -> {
                                 if (callback != null) callback.onSuccess();
@@ -173,7 +178,6 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
         DocumentReference stopRef = planRef.collection(STOPS_COLLECTION).document();
         stop.setId(stopRef.getId());
 
-        // Increment stop count in transaction/batch
         planRef.collection(STOPS_COLLECTION).get()
                 .addOnSuccessListener(stopsSnap -> {
                     int currentCount = stopsSnap.size();
@@ -286,6 +290,147 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
                     .collection(TRAVEL_PLANS_COLLECTION).document(planId)
                     .collection(STOPS_COLLECTION).document(stop.getId());
             batch.update(stopRef, "orderIndex", stop.getOrderIndex());
+        }
+
+        batch.commit()
+                .addOnSuccessListener(aVoid -> {
+                    if (callback != null) callback.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    if (callback != null) callback.onError(e);
+                });
+    }
+
+    @Override
+    public void publishPlan(String uid, TravelPlan plan, List<TravelPlanStop> stops, String ownerDisplayName, OperationCallback callback) {
+        if (uid == null || plan == null || plan.getId() == null) {
+            if (callback != null) callback.onError(new IllegalArgumentException("Invalid parameters"));
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        PublicTravelPlan publicPlan = new PublicTravelPlan(
+                plan.getId(),
+                uid,
+                ownerDisplayName != null ? ownerDisplayName : "FalconPlan Member",
+                plan.getTitle(),
+                plan.getDescription(),
+                plan.getStartDate(),
+                plan.getEndDate(),
+                now,
+                "published",
+                stops != null ? stops : new ArrayList<>()
+        );
+
+        WriteBatch batch = db.batch();
+        DocumentReference publicRef = db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(plan.getId());
+        DocumentReference privateRef = db.collection(USERS_COLLECTION).document(uid)
+                .collection(TRAVEL_PLANS_COLLECTION).document(plan.getId());
+
+        batch.set(publicRef, publicPlan.toMap());
+        batch.update(privateRef, "status", "published", "updatedAt", now);
+
+        batch.commit()
+                .addOnSuccessListener(aVoid -> {
+                    if (callback != null) callback.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    if (callback != null) callback.onError(e);
+                });
+    }
+
+    @Override
+    public void unpublishPlan(String uid, String planId, OperationCallback callback) {
+        if (uid == null || planId == null) {
+            if (callback != null) callback.onError(new IllegalArgumentException("Invalid parameters"));
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        WriteBatch batch = db.batch();
+        DocumentReference publicRef = db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(planId);
+        DocumentReference privateRef = db.collection(USERS_COLLECTION).document(uid)
+                .collection(TRAVEL_PLANS_COLLECTION).document(planId);
+
+        batch.delete(publicRef);
+        batch.update(privateRef, "status", TravelPlan.STATUS_DRAFT, "updatedAt", now);
+
+        batch.commit()
+                .addOnSuccessListener(aVoid -> {
+                    if (callback != null) callback.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    if (callback != null) callback.onError(e);
+                });
+    }
+
+    @Override
+    public void getPublicPlans(PublicPlansCallback callback) {
+        db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION)
+                .orderBy("publishedAt", Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<PublicTravelPlan> list = new ArrayList<>();
+                    for (DocumentSnapshot doc : queryDocumentSnapshots) {
+                        PublicTravelPlan plan = doc.toObject(PublicTravelPlan.class);
+                        if (plan != null) {
+                            list.add(plan);
+                        }
+                    }
+                    if (callback != null) callback.onSuccess(list);
+                })
+                .addOnFailureListener(e -> {
+                    if (callback != null) callback.onError(e);
+                });
+    }
+
+    @Override
+    public void copyPublicPlanToPrivate(String uid, PublicTravelPlan publicPlan, OperationCallback callback) {
+        if (uid == null || publicPlan == null) {
+            if (callback != null) callback.onError(new IllegalArgumentException("Invalid parameters"));
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        DocumentReference planRef = db.collection(USERS_COLLECTION).document(uid)
+                .collection(TRAVEL_PLANS_COLLECTION).document();
+
+        String newPlanId = planRef.getId();
+        int stopCount = publicPlan.getStops() != null ? publicPlan.getStops().size() : 0;
+
+        TravelPlan newPrivatePlan = new TravelPlan(
+                newPlanId,
+                uid,
+                "Copy of " + publicPlan.getTitle(),
+                publicPlan.getDescription(),
+                publicPlan.getStartDate(),
+                publicPlan.getEndDate(),
+                TravelPlan.STATUS_DRAFT,
+                now,
+                now,
+                stopCount
+        );
+
+        WriteBatch batch = db.batch();
+        batch.set(planRef, newPrivatePlan.toMap());
+
+        if (publicPlan.getStops() != null) {
+            for (int i = 0; i < publicPlan.getStops().size(); i++) {
+                TravelPlanStop origStop = publicPlan.getStops().get(i);
+                DocumentReference stopRef = planRef.collection(STOPS_COLLECTION).document();
+                TravelPlanStop copiedStop = new TravelPlanStop(
+                        stopRef.getId(),
+                        origStop.getDestinationId(),
+                        origStop.getDestinationName(),
+                        origStop.getDistrict(),
+                        origStop.getLatitude(),
+                        origStop.getLongitude(),
+                        origStop.getVisitDate(),
+                        "", // Clear original notes
+                        i + 1
+                );
+                batch.set(stopRef, copiedStop.toMap());
+            }
         }
 
         batch.commit()

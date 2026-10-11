@@ -2,6 +2,7 @@ package lk.falconplan.app.data.repository;
 
 import java.util.List;
 
+import lk.falconplan.app.data.model.PublicTravelPlan;
 import lk.falconplan.app.data.model.TravelPlan;
 import lk.falconplan.app.data.model.TravelPlanStop;
 
@@ -9,6 +10,11 @@ public interface TravelPlanRepository {
 
     interface PlansCallback {
         void onSuccess(List<TravelPlan> plans);
+        void onError(Exception exception);
+    }
+
+    interface PublicPlansCallback {
+        void onSuccess(List<PublicTravelPlan> plans);
         void onError(Exception exception);
     }
 
@@ -46,4 +52,12 @@ public interface TravelPlanRepository {
     void removeStopFromPlan(String uid, String planId, String stopId, OperationCallback callback);
 
     void reorderStops(String uid, String planId, List<TravelPlanStop> stops, OperationCallback callback);
+
+    void publishPlan(String uid, TravelPlan plan, List<TravelPlanStop> stops, String ownerDisplayName, OperationCallback callback);
+
+    void unpublishPlan(String uid, String planId, OperationCallback callback);
+
+    void getPublicPlans(PublicPlansCallback callback);
+
+    void copyPublicPlanToPrivate(String uid, PublicTravelPlan publicPlan, OperationCallback callback);
 }
