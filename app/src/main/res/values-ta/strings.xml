@@ -14,6 +14,13 @@
     <string name="explore_heading">உண்மையான இலங்கையைக் கண்டறியவும்</string>
     <string name="preview_badge_label">முன்னோட்டம்</string>
 
+    <!-- Plans Screen -->
+    <string name="title_community_plans">சமூக பயண திட்டங்கள்</string>
+    <string name="btn_publish_plan">வெளியிடு</string>
+    <string name="btn_unpublish_plan">வெளியீட்டை நீக்கு</string>
+    <string name="btn_copy_plan">எனது திட்டங்களுக்கு நகலெடு</string>
+    <string name="btn_share_itinerary">பகிர்</string>
+
     <!-- Profile Screen -->
     <string name="profile_title">சுயவிவரம் மற்றும் அமைப்புகள்</string>
     <string name="profile_guest_name">வரவேற்கிறோம், பயணி</string>

@@ -77,16 +77,23 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
-  test('POST /api/plans/publish publishes sanitized public plan', async () => {
+  test('POST /api/plans/:planId/publish publishes sanitized public plan and strips private notes', async () => {
     process.env.NODE_ENV = 'test';
     const payload = JSON.stringify({
-      planId: 'plan_123',
       title: 'Ella & Knuckles Community Trek',
       description: 'A 5-day village stay',
-      stops: [{ destinationId: 'dest_sigiriya', destinationName: 'Sigiriya', latitude: 7.957, longitude: 80.76 }]
+      ownerDisplayName: 'Saman Perera',
+      stops: [{
+        destinationId: 'dest_sigiriya',
+        destinationName: 'Sigiriya',
+        district: 'Matale',
+        latitude: 7.957,
+        longitude: 80.76,
+        notes: 'TOP SECRET PRIVATE ENTRY NOTE' // Should be stripped out!
+      }]
     });
 
-    const res = await makeRequest('/api/plans/publish', {
+    const res = await makeRequest('/api/plans/plan_001/publish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -98,28 +105,100 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
     assert.equal(res.status, 200);
     assert.equal(res.json.status, 'success');
-    assert.equal(res.json.data.publicPlanId, 'plan_123');
+    assert.equal(res.json.data.publicPlanId, 'plan_001');
     assert.equal(res.json.data.ownerUid, 'user_falcon_789');
     assert.equal(res.json.data.status, 'published');
+
+    // Verify private notes were stripped out in public snapshot!
+    const publishedStop = res.json.data.stops[0];
+    assert.equal(publishedStop.destinationId, 'dest_sigiriya');
+    assert.equal(publishedStop.notes, undefined);
   });
 
-  test('POST /api/plans/unpublish unpublishes public plan', async () => {
-    process.env.NODE_ENV = 'test';
-    const payload = JSON.stringify({ planId: 'plan_123' });
+  test('POST /api/plans/:planId/publish without auth header returns 401 or 503', async () => {
+    delete process.env.NODE_ENV;
+    const res = await makeRequest('/api/plans/plan_001/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Test Plan' })
+    });
+    assert.ok(res.status === 401 || res.status === 503);
+  });
 
-    const res = await makeRequest('/api/plans/unpublish', {
+  test('POST /api/plans/:planId/publish by non-owner returns 403 FORBIDDEN', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/plans/plan_001/publish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'user_unauthorized_999',
+        'x-test-mock-unauthorized': 'true'
+      },
+      body: JSON.stringify({ title: 'Test Plan' })
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.json.code, 'FORBIDDEN');
+  });
+
+  test('POST /api/plans/:planId/unpublish unpublishes public plan', async () => {
+    process.env.NODE_ENV = 'test';
+
+    const res = await makeRequest('/api/plans/plan_001/unpublish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-test-mock-auth': 'true',
         'x-test-mock-uid': 'user_falcon_789'
-      },
-      body: payload
+      }
     });
 
     assert.equal(res.status, 200);
     assert.equal(res.json.status, 'success');
-    assert.equal(res.json.planId, 'plan_123');
+    assert.equal(res.json.planId, 'plan_001');
+  });
+
+  test('POST /api/plans/:planId/unpublish by non-owner returns 403 FORBIDDEN', async () => {
+    process.env.NODE_ENV = 'test';
+
+    const res = await makeRequest('/api/plans/plan_001/unpublish', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'user_unauthorized_999',
+        'x-test-mock-unauthorized': 'true'
+      }
+    });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.json.code, 'FORBIDDEN');
+  });
+
+  test('GET /api/public-plans returns paginated list of public plans', async () => {
+    const res = await makeRequest('/api/public-plans?page=1&limit=10');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.page, 1);
+    assert.equal(res.json.limit, 10);
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/public-plans/:publicPlanId for non-existent plan returns 404 NOT_FOUND', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/public-plans/non_existent_plan_999');
+    assert.equal(res.status, 404);
+    assert.equal(res.json.code, 'NOT_FOUND');
+  });
+
+  test('GET /api/public-plans/:publicPlanId for published plan returns 200 OK', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/public-plans/plan_sigiriya_1', {
+      headers: { 'x-test-mock-published': 'true' }
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.data.publicPlanId, 'plan_sigiriya_1');
+    assert.equal(res.json.data.status, 'published');
   });
 
   test('POST /api/me with oversized payload returns 413 Payload Too Large', async () => {

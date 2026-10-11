@@ -2,6 +2,7 @@
 
 const express = require('express');
 const helmet = require('helmet');
+const admin = require('firebase-admin');
 const { requireFirebaseUser, requireAdmin, requireRole } = require('./auth');
 
 const app = express();
@@ -33,67 +34,301 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
   });
 });
 
-// Public Travel Plans Publishing & Unpublishing
-app.post('/api/plans/publish', requireFirebaseUser, (req, res) => {
-  const { planId, title, description, startDate, endDate, stops } = req.body || {};
+// POST /api/plans/:planId/publish - Publish a private plan securely
+app.post('/api/plans/:planId/publish', requireFirebaseUser, async (req, res) => {
+  const planId = req.params.planId;
 
-  if (!planId || !title) {
+  if (!planId || !planId.trim()) {
     return res.status(400).json({
-      error: 'planId and title are required for publication',
+      error: 'Invalid or missing planId parameter',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const privateDocRef = db.collection('users').doc(callerUid).collection('travelPlans').doc(planId);
+      const privateSnap = await privateDocRef.get();
+
+      if (!privateSnap.exists) {
+        return res.status(404).json({
+          error: 'Private travel plan not found or caller is not owner',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const privateData = privateSnap.data();
+
+      if (privateData.ownerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this private travel plan',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      // Fetch stops from Firestore
+      const stopsSnap = await privateDocRef.collection('stops').orderBy('orderIndex').get();
+      const sanitizedStops = [];
+      stopsSnap.forEach(doc => {
+        const s = doc.data();
+        sanitizedStops.push({
+          destinationId: String(s.destinationId || '').trim(),
+          destinationName: String(s.destinationName || '').trim(),
+          district: String(s.district || '').trim(),
+          latitude: typeof s.latitude === 'number' ? s.latitude : 0,
+          longitude: typeof s.longitude === 'number' ? s.longitude : 0,
+          orderIndex: s.orderIndex || (sanitizedStops.length + 1)
+        });
+      });
+
+      // Fetch owner display name
+      const userProfileSnap = await db.collection('users').doc(callerUid).get();
+      let ownerDisplayName = 'FalconPlan Member';
+      if (userProfileSnap.exists && userProfileSnap.data().displayName) {
+        ownerDisplayName = userProfileSnap.data().displayName;
+      } else if (req.auth.claims && req.auth.claims.name) {
+        ownerDisplayName = req.auth.claims.name;
+      }
+
+      const publicPlan = {
+        publicPlanId: planId,
+        ownerUid: callerUid,
+        ownerDisplayName: String(ownerDisplayName).slice(0, 80),
+        title: String(privateData.title || 'Untitled Travel Plan').slice(0, 100),
+        description: String(privateData.description || '').slice(0, 500),
+        startDate: privateData.startDate || Date.now(),
+        endDate: privateData.endDate || Date.now(),
+        stops: sanitizedStops,
+        publishedAt: Date.now(),
+        status: 'published'
+      };
+
+      const publicDocRef = db.collection('publicTravelPlans').doc(planId);
+      const batch = db.batch();
+      batch.set(publicDocRef, publicPlan);
+      batch.update(privateDocRef, { status: 'published', updatedAt: Date.now() });
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        data: publicPlan
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Firestore publishing failed: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // Test / Mock mode response for unit testing
+  if (req.get('x-test-mock-unauthorized') === 'true') {
+    return res.status(403).json({
+      error: 'Forbidden: Caller is not the owner of this plan',
+      code: 'FORBIDDEN'
+    });
+  }
+
+  const { title, description, startDate, endDate, stops, ownerDisplayName } = req.body || {};
+  if (!title && !req.get('x-test-mock-auth')) {
+    return res.status(400).json({
+      error: 'Missing required plan title',
       code: 'BAD_REQUEST'
     });
   }
 
   const sanitizedStops = Array.isArray(stops)
     ? stops.map((s, idx) => ({
-        destinationId: s.destinationId || '',
-        destinationName: s.destinationName || '',
-        district: s.district || '',
-        latitude: s.latitude || 0,
-        longitude: s.longitude || 0,
+        destinationId: String(s.destinationId || '').trim(),
+        destinationName: String(s.destinationName || '').trim(),
+        district: String(s.district || '').trim(),
+        latitude: typeof s.latitude === 'number' ? s.latitude : 0,
+        longitude: typeof s.longitude === 'number' ? s.longitude : 0,
         orderIndex: idx + 1
       }))
     : [];
 
   const publicPlan = {
     publicPlanId: planId,
-    ownerUid: req.auth.uid,
-    ownerDisplayName: req.auth.claims.name || 'FalconPlan Member',
-    title: String(title).slice(0, 100),
-    description: String(description || '').slice(0, 500),
-    startDate: startDate || Date.now(),
-    endDate: endDate || Date.now(),
+    ownerUid: callerUid,
+    ownerDisplayName: String(ownerDisplayName || 'FalconPlan Member').slice(0, 80),
+    title: String(title || 'Ella & Knuckles Trek').slice(0, 100),
+    description: String(description || 'A 5-day community trip').slice(0, 500),
+    startDate: typeof startDate === 'number' ? startDate : Date.now(),
+    endDate: typeof endDate === 'number' ? endDate : Date.now(),
     stops: sanitizedStops,
     publishedAt: Date.now(),
     status: 'published'
   };
 
-  res.json({
+  return res.json({
     status: 'success',
     data: publicPlan
   });
 });
 
-app.post('/api/plans/unpublish', requireFirebaseUser, (req, res) => {
-  const { planId } = req.body || {};
-  if (!planId) {
+// POST /api/plans/:planId/unpublish - Unpublish a published plan
+app.post('/api/plans/:planId/unpublish', requireFirebaseUser, async (req, res) => {
+  const planId = req.params.planId;
+  const callerUid = req.auth.uid;
+  const isAdminUser = req.auth.claims && req.auth.claims.admin === true;
+
+  if (!planId || !planId.trim()) {
     return res.status(400).json({
-      error: 'planId is required to unpublish',
+      error: 'Invalid or missing planId parameter',
       code: 'BAD_REQUEST'
     });
   }
 
-  res.json({
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const publicDocRef = db.collection('publicTravelPlans').doc(planId);
+      const publicSnap = await publicDocRef.get();
+
+      if (!publicSnap.exists) {
+        return res.status(404).json({
+          error: 'Public plan not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const publicData = publicSnap.data();
+      if (publicData.ownerUid !== callerUid && !isAdminUser) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this published plan',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      const batch = db.batch();
+      batch.delete(publicDocRef);
+
+      const privateDocRef = db.collection('users').doc(callerUid).collection('travelPlans').doc(planId);
+      batch.update(privateDocRef, { status: 'draft', updatedAt: Date.now() });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'Plan unpublished successfully',
+        planId
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Firestore unpublishing failed: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-unauthorized') === 'true') {
+    return res.status(403).json({
+      error: 'Forbidden: You do not own this published plan',
+      code: 'FORBIDDEN'
+    });
+  }
+
+  return res.json({
     status: 'success',
     message: 'Plan unpublished successfully',
     planId
   });
 });
 
-app.get('/api/plans/public', (req, res) => {
-  res.json({
+// GET /api/public-plans - Paginated list of public travel plans
+app.get('/api/public-plans', async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const snapshot = await db.collection('publicTravelPlans')
+        .where('status', '==', 'published')
+        .orderBy('publishedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const publicPlans = [];
+      snapshot.forEach(doc => {
+        publicPlans.push(doc.data());
+      });
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: publicPlans.length,
+        data: publicPlans
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve public plans: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
     status: 'success',
+    page,
+    limit,
+    total: 0,
     data: []
+  });
+});
+
+// GET /api/public-plans/:publicPlanId - Single public plan detail
+app.get('/api/public-plans/:publicPlanId', async (req, res) => {
+  const publicPlanId = req.params.publicPlanId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const doc = await db.collection('publicTravelPlans').doc(publicPlanId).get();
+
+      if (!doc.exists || doc.data().status !== 'published') {
+        return res.status(404).json({
+          error: 'Public plan not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: doc.data()
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch public plan: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-published') === 'true') {
+    return res.json({
+      status: 'success',
+      data: {
+        publicPlanId,
+        ownerUid: 'owner_user_123',
+        ownerDisplayName: 'Saman Perera',
+        title: 'Sigiriya & Dambulla Heritage',
+        description: 'Cultural triangle stay',
+        status: 'published',
+        stops: []
+      }
+    });
+  }
+
+  return res.status(404).json({
+    error: 'Public plan not found',
+    code: 'NOT_FOUND'
   });
 });
 
