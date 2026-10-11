@@ -33,23 +33,36 @@ service cloud.firestore {
 
     // User Profiles: users/{userId}
     match /users/{userId} {
-      // Authenticated users can only read their own profile
       allow read: if isOwner(userId);
 
-      // Create: Owner only, strictly allowed keys, valid types, matching UID
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
         && isValidProfileData(request.resource.data);
 
-      // Update: Owner only, strictly allowed keys, valid types, immutable UID & createdAt
       allow update: if isOwner(userId)
         && request.resource.data.uid == userId
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.createdAt == resource.data.createdAt
         && isValidProfileData(request.resource.data);
 
-      // Client-side delete prohibited
       allow delete: if false;
+
+      // Saved Places Subcollection: users/{userId}/savedPlaces/{savedPlaceId}
+      match /savedPlaces/{savedPlaceId} {
+        allow read: if isOwner(userId);
+
+        allow create, update: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['id', 'destinationId', 'destinationName', 'district', 'latitude', 'longitude', 'note', 'createdAt', 'updatedAt'])
+          && request.resource.data.id is string
+          && request.resource.data.destinationId is string
+          && request.resource.data.destinationName is string
+          && request.resource.data.district is string
+          && request.resource.data.latitude >= -90.0 && request.resource.data.latitude <= 90.0
+          && request.resource.data.longitude >= -180.0 && request.resource.data.longitude <= 180.0
+          && request.resource.data.note is string;
+
+        allow delete: if isOwner(userId);
+      }
     }
 
     // Deny read and write access to all other collections by default
