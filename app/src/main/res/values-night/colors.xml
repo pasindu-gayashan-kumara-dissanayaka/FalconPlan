@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Primary Colors - Forest Green (Night) -->
+    <color name="primary">#52B788</color>
+    <color name="primary_dark">#74C69D</color>
+    <color name="primary_medium">#40916C</color>
+    <color name="primary_light">#95D5B2</color>
+    <color name="primary_container">#1A3528</color>
+    <color name="on_primary">#081C15</color>
+    <color name="on_primary_container">#D8F3DC</color>
+
+    <!-- Warm Orange Accents (Night) -->
+    <color name="accent_orange">#F28F74</color>
+    <color name="accent_orange_dark">#E07A5F</color>
+    <color name="accent_orange_container">#3E1E16</color>
+    <color name="on_accent_orange">#1F0A05</color>
+    <color name="on_accent_orange_container">#FAD9CF</color>
+
+    <!-- Backgrounds & Surfaces (Night) -->
+    <color name="background">#121614</color>
+    <color name="surface">#1A201C</color>
+    <color name="surface_variant">#242C27</color>
+    <color name="surface_elevated">#212823</color>
+
+    <!-- Typography / Text Colors (Night) -->
+    <color name="text_primary">#E1E3DF</color>
+    <color name="text_secondary">#A2A8A3</color>
+    <color name="text_tertiary">#787E79</color>
+
+    <!-- UI Elements & Borders (Night) -->
+    <color name="border_subtle">#2E3832</color>
+    <color name="divider">#26302B</color>
+
+    <!-- Status & Badges (Night) -->
+    <color name="badge_preview_bg">#3E2723</color>
+    <color name="badge_preview_text">#FFB74D</color>
+    <color name="star_gold">#FFB703</color>
+    <color name="overlay_black_40">#80000000</color>
+
+    <!-- Legacy / System compatibility -->
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+</resources>

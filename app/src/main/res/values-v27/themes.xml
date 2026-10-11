@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Base.Theme.FalconPlan" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Brand Colors -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorPrimaryContainer">@color/primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/on_primary_container</item>
+
+        <item name="colorSecondary">@color/accent_orange</item>
+        <item name="colorOnSecondary">@color/on_accent_orange</item>
+        <item name="colorSecondaryContainer">@color/accent_orange_container</item>
+        <item name="colorOnSecondaryContainer">@color/on_accent_orange_container</item>
+
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+
+        <!-- Rounded Shape Styles -->
+        <item name="shapeAppearanceCornerExtraLarge">@style/ShapeAppearance.FalconPlan.ExtraLarge</item>
+        <item name="shapeAppearanceCornerLarge">@style/ShapeAppearance.FalconPlan.Large</item>
+        <item name="shapeAppearanceCornerMedium">@style/ShapeAppearance.FalconPlan.Medium</item>
+
+        <!-- System UI Window Flags -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

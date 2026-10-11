@@ -1,5 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- Brand Primary Colors - Forest Green -->
+    <color name="primary">#1B4332</color>
+    <color name="primary_dark">#081C15</color>
+    <color name="primary_medium">#2D6A4F</color>
+    <color name="primary_light">#40916C</color>
+    <color name="primary_container">#E8F3EE</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_primary_container">#081C15</color>
+
+    <!-- Warm Orange Accents -->
+    <color name="accent_orange">#E07A5F</color>
+    <color name="accent_orange_dark">#C85A3C</color>
+    <color name="accent_orange_container">#FDF2EF</color>
+    <color name="on_accent_orange">#FFFFFF</color>
+    <color name="on_accent_orange_container">#602111</color>
+
+    <!-- Backgrounds & Surfaces (Ivory & Pure White) -->
+    <color name="background">#FBFBFA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#F2F3EF</color>
+    <color name="surface_elevated">#FFFFFF</color>
+
+    <!-- Typography / Text Colors -->
+    <color name="text_primary">#1A1C1A</color>
+    <color name="text_secondary">#5F6560</color>
+    <color name="text_tertiary">#8A918B</color>
+
+    <!-- UI Elements & Borders -->
+    <color name="border_subtle">#E2E4DE</color>
+    <color name="divider">#ECEEE8</color>
+
+    <!-- Status & Badges -->
+    <color name="badge_preview_bg">#FFF3E0</color>
+    <color name="badge_preview_text">#E65100</color>
+    <color name="star_gold">#FFB703</color>
+    <color name="overlay_black_40">#66000000</color>
+
+    <!-- Legacy / System compatibility -->
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
 </resources>
