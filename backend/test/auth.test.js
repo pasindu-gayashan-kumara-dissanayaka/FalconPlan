@@ -77,16 +77,16 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
-  test('POST /api/plans/publish publishes sanitized public plan', async () => {
+  test('POST /api/plans/:planId/publish publishes sanitized public plan', async () => {
     process.env.NODE_ENV = 'test';
     const payload = JSON.stringify({
-      planId: 'plan_123',
       title: 'Ella & Knuckles Community Trek',
       description: 'A 5-day village stay',
+      ownerDisplayName: 'Saman Perera',
       stops: [{ destinationId: 'dest_sigiriya', destinationName: 'Sigiriya', latitude: 7.957, longitude: 80.76 }]
     });
 
-    const res = await makeRequest('/api/plans/publish', {
+    const res = await makeRequest('/api/plans/plan_001/publish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -98,28 +98,35 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
     assert.equal(res.status, 200);
     assert.equal(res.json.status, 'success');
-    assert.equal(res.json.data.publicPlanId, 'plan_123');
+    assert.equal(res.json.data.publicPlanId, 'plan_001');
     assert.equal(res.json.data.ownerUid, 'user_falcon_789');
     assert.equal(res.json.data.status, 'published');
   });
 
-  test('POST /api/plans/unpublish unpublishes public plan', async () => {
+  test('POST /api/plans/:planId/unpublish unpublishes public plan', async () => {
     process.env.NODE_ENV = 'test';
-    const payload = JSON.stringify({ planId: 'plan_123' });
 
-    const res = await makeRequest('/api/plans/unpublish', {
+    const res = await makeRequest('/api/plans/plan_001/unpublish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-test-mock-auth': 'true',
         'x-test-mock-uid': 'user_falcon_789'
-      },
-      body: payload
+      }
     });
 
     assert.equal(res.status, 200);
     assert.equal(res.json.status, 'success');
-    assert.equal(res.json.planId, 'plan_123');
+    assert.equal(res.json.planId, 'plan_001');
+  });
+
+  test('GET /api/public-plans returns paginated list of public plans', async () => {
+    const res = await makeRequest('/api/public-plans?page=1&limit=10');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.page, 1);
+    assert.equal(res.json.limit, 10);
+    assert.ok(Array.isArray(res.json.data));
   });
 
   test('POST /api/me with oversized payload returns 413 Payload Too Large', async () => {

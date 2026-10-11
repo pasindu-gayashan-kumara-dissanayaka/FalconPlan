@@ -31,6 +31,32 @@ service cloud.firestore {
         && (data.updatedAt is number || data.updatedAt is timestamp);
     }
 
+    function isValidTravelPlan(data, userId, planId) {
+      return data.keys().hasOnly(['id', 'ownerUid', 'title', 'description', 'startDate', 'endDate', 'status', 'createdAt', 'updatedAt', 'stopCount'])
+        && data.id == planId
+        && data.ownerUid == userId
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 100
+        && data.description is string && data.description.size() <= 500
+        && (data.status == 'draft' || data.status == 'planned' || data.status == 'published')
+        && data.startDate is number
+        && data.endDate is number
+        && data.startDate <= data.endDate
+        && data.stopCount is number && data.stopCount >= 0;
+    }
+
+    function isValidPlanStop(data, stopId) {
+      return data.keys().hasOnly(['id', 'destinationId', 'destinationName', 'district', 'latitude', 'longitude', 'visitDate', 'notes', 'orderIndex'])
+        && data.id == stopId
+        && data.destinationId is string
+        && data.destinationName is string
+        && data.district is string
+        && data.latitude >= -90.0 && data.latitude <= 90.0
+        && data.longitude >= -180.0 && data.longitude <= 180.0
+        && data.visitDate is number
+        && data.notes is string
+        && data.orderIndex is number && data.orderIndex >= 0;
+    }
+
     // User Profiles: users/{userId}
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -49,51 +75,51 @@ service cloud.firestore {
 
       // Saved Places Subcollection: users/{userId}/savedPlaces/{savedPlaceId}
       match /savedPlaces/{savedPlaceId} {
-        allow read: if isOwner(userId);
+        allow read, delete: if isOwner(userId);
 
         allow create, update: if isOwner(userId)
           && request.resource.data.keys().hasOnly(['id', 'destinationId', 'destinationName', 'district', 'latitude', 'longitude', 'note', 'createdAt', 'updatedAt'])
-          && request.resource.data.id is string
+          && request.resource.data.id == savedPlaceId
           && request.resource.data.destinationId is string
           && request.resource.data.destinationName is string
           && request.resource.data.district is string
           && request.resource.data.latitude >= -90.0 && request.resource.data.latitude <= 90.0
           && request.resource.data.longitude >= -180.0 && request.resource.data.longitude <= 180.0
           && request.resource.data.note is string;
-
-        allow delete: if isOwner(userId);
       }
 
       // Travel Plans Subcollection: users/{userId}/travelPlans/{planId}
       match /travelPlans/{planId} {
         allow read, delete: if isOwner(userId);
 
-        allow create, update: if isOwner(userId)
-          && request.resource.data.keys().hasOnly(['id', 'ownerUid', 'title', 'description', 'startDate', 'endDate', 'status', 'createdAt', 'updatedAt', 'stopCount'])
-          && request.resource.data.id is string
-          && request.resource.data.ownerUid == userId
-          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
-          && request.resource.data.description is string && request.resource.data.description.size() <= 500
-          && (request.resource.data.status == 'draft' || request.resource.data.status == 'planned')
-          && request.resource.data.startDate is number
-          && request.resource.data.endDate is number;
+        allow create: if isOwner(userId)
+          && isValidTravelPlan(request.resource.data, userId, planId);
+
+        allow update: if isOwner(userId)
+          && isValidTravelPlan(request.resource.data, userId, planId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.createdAt == resource.data.createdAt;
 
         // Travel Plan Stops Subcollection: users/{userId}/travelPlans/{planId}/stops/{stopId}
         match /stops/{stopId} {
           allow read, delete: if isOwner(userId);
 
-          allow create, update: if isOwner(userId)
-            && request.resource.data.keys().hasOnly(['id', 'destinationId', 'destinationName', 'district', 'latitude', 'longitude', 'visitDate', 'notes', 'orderIndex'])
-            && request.resource.data.id is string
-            && request.resource.data.destinationId is string
-            && request.resource.data.destinationName is string
-            && request.resource.data.district is string
-            && request.resource.data.latitude >= -90.0 && request.resource.data.latitude <= 90.0
-            && request.resource.data.longitude >= -180.0 && request.resource.data.longitude <= 180.0
-            && request.resource.data.notes is string
-            && request.resource.data.orderIndex is number;
+          allow create: if isOwner(userId)
+            && isValidPlanStop(request.resource.data, stopId);
+
+          allow update: if isOwner(userId)
+            && isValidPlanStop(request.resource.data, stopId)
+            && request.resource.data.id == resource.data.id
+            && request.resource.data.destinationId == resource.data.destinationId;
         }
       }
+    }
+
+    // Public Travel Plans Collection: publicTravelPlans/{planId}
+    match /publicTravelPlans/{planId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Managed via trusted Admin SDK / backend
     }
 
     // Deny read and write access to all other collections by default
