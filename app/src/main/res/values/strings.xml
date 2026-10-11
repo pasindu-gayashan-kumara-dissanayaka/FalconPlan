@@ -1,3 +1,79 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="app_name">FalconPlan</string>
+    <string name="app_tagline">Sri Lanka Community Tourism &amp; Rural Homestays</string>
+
+    <!-- Navigation Bar Labels -->
+    <string name="nav_community">Community</string>
+    <string name="nav_explore">Explore</string>
+    <string name="nav_plus">Create</string>
+    <string name="nav_plans">Plans</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- Center Plus Bottom Sheet -->
+    <string name="plus_sheet_title">Create Content</string>
+    <string name="plus_sheet_subtitle">Share your rural journey or plan a new village stay</string>
+    <string name="plus_sheet_story">Story</string>
+    <string name="plus_sheet_story_desc">Share a rural experience or local cultural photo story</string>
+    <string name="plus_sheet_travel_plan">Travel Plan</string>
+    <string name="plus_sheet_travel_plan_desc">Build and customize a community tourism itinerary</string>
+    <string name="plus_sheet_post">Post</string>
+    <string name="plus_sheet_post_desc">Ask local hosts questions or post a community update</string>
+
+    <!-- Welcome / Splash Screen -->
+    <string name="welcome_heading">Experience Sri Lanka’s Village Warmth</string>
+    <string name="welcome_subtitle">Connect directly with local hosts, stay in authentic rural homestays, and empower Sri Lankan village communities through sustainable tourism.</string>
+    <string name="btn_get_started">Explore Homestays</string>
+    <string name="btn_skip">Skip to Explore</string>
+
+    <!-- Explore Screen -->
+    <string name="explore_greeting">Ayubowan!</string>
+    <string name="explore_heading">Discover Authentic Sri Lanka</string>
+    <string name="search_placeholder">Search homestays, cultural tours, villages&#8230;</string>
+    <string name="preview_badge_label">Design Preview</string>
+    <string name="section_featured_title">Featured Village Stays</string>
+    <string name="section_categories_title">Explore by Region</string>
+    <string name="section_experiences_title">Community Experiences</string>
+    <string name="btn_view_details">View Details</string>
+    <string name="per_night">/ night</string>
+    <string name="explore_empty_msg">No homestays match your search or selected region.</string>
+
+    <!-- Categories -->
+    <string name="cat_all">All Regions</string>
+    <string name="cat_hill_country">Ella &amp; Hill Country</string>
+    <string name="cat_cultural">Cultural Triangle</string>
+    <string name="cat_knuckles">Knuckles Villages</string>
+    <string name="cat_rainforest">Sinharaja Edge</string>
+    <string name="cat_coastal">Southern Coast</string>
+
+    <!-- Community Screen -->
+    <string name="community_title">Community Stories &amp; Culture</string>
+    <string name="community_subtitle">Authentic perspectives, recipes, and heritage stories directly from local villagers.</string>
+    <string name="community_empty_heading">Community Hub</string>
+    <string name="community_empty_desc">Share your stories, read authentic local host posts, and engage with rural Sri Lankan tourism initiatives.</string>
+
+    <!-- Plans Screen -->
+    <string name="plans_title">My Travel Plans</string>
+    <string name="plans_subtitle">Organize your booked homestays and community tour itineraries.</string>
+    <string name="plans_empty_heading">No Saved Plans Yet</string>
+    <string name="plans_empty_desc">When you save homestays or create custom village travel plans, they will appear here.</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">Profile &amp; Settings</string>
+    <string name="profile_guest_name">Welcome, Traveler</string>
+    <string name="profile_guest_subtitle">Sign in to manage bookings, post village stories, and customize your experience.</string>
+    <string name="profile_btn_signin">Sign In / Register</string>
+    <string name="profile_lang_title">App Language / භාෂාව / மொழி</string>
+    <string name="profile_lang_en">English (Default)</string>
+    <string name="profile_lang_si">සිංහල (Sinhala)</string>
+    <string name="profile_lang_ta">தமிழ் (Tamil)</string>
+    <string name="profile_account_type">Role: Traveler (Guest Mode)</string>
+    <string name="profile_about_app">About FalconPlan</string>
+    <string name="profile_app_info">FalconPlan v1.0 • Sri Lankan Community Tourism Platform</string>
+    <string name="lang_switched_msg">Language updated to %s</string>
+
+    <!-- Dialogs & General -->
+    <string name="placeholder_feature_title">Design Preview</string>
+    <string name="placeholder_feature_msg">This is a design preview for Phase 1. Interactive booking and live posting will be active in upcoming phases.</string>
+    <string name="btn_close">Close</string>
+    <string name="btn_ok">OK</string>
 </resources>
