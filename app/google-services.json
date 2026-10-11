@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "333753747421",
+    "project_id": "falconplan-88ad9",
+    "storage_bucket": "falconplan-88ad9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:333753747421:android:28eab91ec1e379ba935834",
+        "android_client_info": {
+          "package_name": "lk.falconplan.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "333753747421-enbgf5sij96a49rg44110g7qpsqj8j3v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "lk.falconplan.app",
+            "certificate_hash": "4af44737311cc5a543ee8e3fa9e8edb28a7a3dd5"
+          }
+        },
+        {
+          "client_id": "333753747421-3u096eqtbqd8me55dd7inq36bqpll14v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJU8Rc1UzOxzHfrJ_nW16zogKUv2ofUpo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "333753747421-3u096eqtbqd8me55dd7inq36bqpll14v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

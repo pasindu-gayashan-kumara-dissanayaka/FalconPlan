@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidActiveMode(mode) {
+      return mode == 'traveler' || mode == 'provider';
+    }
+
+    // User Profiles: users/{userId}
+    match /users/{userId} {
+      // Authenticated users can only read their own profile
+      allow read: if isOwner(userId);
+
+      // Creation allowed only for own UID, valid activeMode, and prohibits self-granting privileged roles
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && isValidActiveMode(request.resource.data.activeMode)
+        && !('isAdmin' in request.resource.data)
+        && !('isVerified' in request.resource.data)
+        && !('role' in request.resource.data);
+
+      // Updates allowed only for own UID, valid activeMode, and cannot alter privileged fields
+      allow update: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && isValidActiveMode(request.resource.data.activeMode)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'isVerified', 'role']);
+
+      // Prohibit deletion from client app
+      allow delete: if false;
+    }
+
+    // Deny read and write access to all other collections by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

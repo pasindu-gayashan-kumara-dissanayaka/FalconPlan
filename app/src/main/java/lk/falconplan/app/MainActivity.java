@@ -2,6 +2,7 @@ package lk.falconplan.app;
 
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.IdRes;
@@ -12,9 +13,14 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.firebase.auth.FirebaseUser;
 
+import lk.falconplan.app.ui.auth.AuthEntryFragment;
+import lk.falconplan.app.ui.auth.AuthViewModel;
+import lk.falconplan.app.ui.auth.EmailVerificationFragment;
 import lk.falconplan.app.ui.community.CommunityFragment;
 import lk.falconplan.app.ui.explore.ExploreFragment;
 import lk.falconplan.app.ui.plans.PlansFragment;
@@ -25,7 +31,9 @@ import lk.falconplan.app.ui.splash.WelcomeFragment;
 public class MainActivity extends AppCompatActivity {
 
     private BottomNavigationView bottomNavigation;
-    private int currentSelectedTabId = R.id.nav_explore;
+    private View fragmentContainer;
+    private AuthViewModel authViewModel;
+    private int currentSelectedTabId = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,6 +42,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         bottomNavigation = findViewById(R.id.bottomNavigation);
+        fragmentContainer = findViewById(R.id.fragmentContainer);
+        authViewModel = new ViewModelProvider(this).get(AuthViewModel.class);
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.mainRoot), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -43,12 +53,61 @@ public class MainActivity extends AppCompatActivity {
         });
 
         setupBottomNavigation();
+        observeAuthState();
 
         if (savedInstanceState == null) {
-            // Load Welcome Fragment initially for first-launch experience
-            loadFragment(new WelcomeFragment(), false);
-            bottomNavigation.setVisibility(View.GONE);
+            checkSessionAndRoute();
         }
+    }
+
+    private void observeAuthState() {
+        authViewModel.getAuthStateLiveData().observe(this, resource -> {
+            if (resource == null) return;
+            if (resource.getData() != null) {
+                FirebaseUser user = resource.getData();
+                if (user.isEmailVerified() || isGoogleUser(user)) {
+                    navigateToMainContent();
+                } else {
+                    loadAuthFragment(new EmailVerificationFragment(), false);
+                }
+            }
+        });
+    }
+
+    private boolean isGoogleUser(FirebaseUser user) {
+        if (user == null || user.getProviderData() == null) return false;
+        for (var info : user.getProviderData()) {
+            if ("google.com".equals(info.getProviderId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void checkSessionAndRoute() {
+        FirebaseUser currentUser = authViewModel.getCurrentUser();
+        if (currentUser != null) {
+            if (currentUser.isEmailVerified() || isGoogleUser(currentUser)) {
+                navigateToMainContent();
+            } else {
+                loadAuthFragment(new EmailVerificationFragment(), false);
+            }
+        } else {
+            showWelcomeScreen();
+        }
+    }
+
+    public void showWelcomeScreen() {
+        bottomNavigation.setVisibility(View.GONE);
+        setContainerBottomMargin(0);
+        currentSelectedTabId = -1;
+        loadFragment(new WelcomeFragment(), false);
+    }
+
+    public void loadAuthFragment(Fragment fragment, boolean addToBackStack) {
+        bottomNavigation.setVisibility(View.GONE);
+        setContainerBottomMargin(0);
+        loadFragment(fragment, addToBackStack);
     }
 
     private void setupBottomNavigation() {
@@ -59,11 +118,11 @@ public class MainActivity extends AppCompatActivity {
                 // Center Plus (+) opens polished BottomSheet
                 CreateBottomSheetFragment bottomSheet = CreateBottomSheetFragment.newInstance();
                 bottomSheet.show(getSupportFragmentManager(), CreateBottomSheetFragment.TAG);
-                // Keep the current active tab selection intact
                 return false;
             }
 
-            if (itemId == currentSelectedTabId && getSupportFragmentManager().findFragmentById(R.id.fragmentContainer) != null) {
+            Fragment currentFrag = getSupportFragmentManager().findFragmentById(R.id.fragmentContainer);
+            if (itemId == currentSelectedTabId && currentFrag != null && !(currentFrag instanceof WelcomeFragment)) {
                 return true;
             }
 
@@ -88,15 +147,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void navigateToMainContent() {
+        getSupportFragmentManager().popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         bottomNavigation.setVisibility(View.VISIBLE);
-        switchToTab(R.id.nav_explore);
+        setContainerBottomMargin((int) (64 * getResources().getDisplayMetrics().density));
+        currentSelectedTabId = R.id.nav_explore;
+        bottomNavigation.setSelectedItemId(R.id.nav_explore);
+        loadFragment(new ExploreFragment(), false);
     }
 
     public void switchToTab(@IdRes int tabId) {
         if (bottomNavigation.getVisibility() != View.VISIBLE) {
             bottomNavigation.setVisibility(View.VISIBLE);
+            setContainerBottomMargin((int) (64 * getResources().getDisplayMetrics().density));
         }
         bottomNavigation.setSelectedItemId(tabId);
+    }
+
+    private void setContainerBottomMargin(int marginPx) {
+        if (fragmentContainer.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) fragmentContainer.getLayoutParams();
+            params.bottomMargin = marginPx;
+            fragmentContainer.setLayoutParams(params);
+        }
     }
 
     private void loadFragment(Fragment fragment, boolean addToBackStack) {
