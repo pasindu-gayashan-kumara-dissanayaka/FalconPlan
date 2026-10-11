@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">FalconPlan</string>
+    <string name="app_tagline">இலங்கை கிராமிய சுற்றுலா மற்றும் வீட்டு விடுதிகள்</string>
+
+    <!-- Navigation Bar Labels -->
+    <string name="nav_community">சமூகம்</string>
+    <string name="nav_explore">ஆராயுங்கள்</string>
+    <string name="nav_plus">உருவாக்கு</string>
+    <string name="nav_plans">திட்டங்கள்</string>
+    <string name="nav_profile">சுயவிவரம்</string>
+
+    <!-- Explore Screen -->
+    <string name="explore_greeting">ஆயுபோவன்!</string>
+    <string name="explore_heading">உண்மையான இலங்கையைக் கண்டறியவும்</string>
+    <string name="preview_badge_label">முன்னோட்டம்</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">சுயவிவரம் மற்றும் அமைப்புகள்</string>
+    <string name="profile_guest_name">வரவேற்கிறோம், பயணி</string>
+    <string name="profile_btn_signin">உள்நுழைக / பதிவுசெய்க</string>
+    <string name="profile_btn_edit">சுயவிவரத்தைத் திருத்து</string>
+    <string name="profile_btn_signout">வெளியேறு</string>
+    <string name="profile_lang_title">பயன்பாட்டு மொழி</string>
+
+    <string name="btn_close">மூடு</string>
+    <string name="btn_ok">சரி</string>
+</resources>

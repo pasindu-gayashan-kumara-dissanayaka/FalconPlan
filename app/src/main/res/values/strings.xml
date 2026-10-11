@@ -57,12 +57,14 @@
     <string name="plans_empty_heading">No Saved Plans Yet</string>
     <string name="plans_empty_desc">When you save homestays or create custom village travel plans, they will appear here.</string>
 
-    <!-- Profile Screen -->
+    <!-- Profile & Settings Screen -->
     <string name="profile_title">Profile &amp; Settings</string>
     <string name="profile_guest_name">Welcome, Traveler</string>
     <string name="profile_guest_subtitle">Sign in to manage bookings, post village stories, and customize your experience.</string>
     <string name="profile_btn_signin">Sign In / Register</string>
-    <string name="profile_lang_title">App Language / භාෂාව / மொழி</string>
+    <string name="profile_btn_edit">Edit Profile</string>
+    <string name="profile_btn_signout">Sign Out</string>
+    <string name="profile_lang_title">Application Language</string>
     <string name="profile_lang_en">English (Default)</string>
     <string name="profile_lang_si">සිංහල (Sinhala)</string>
     <string name="profile_lang_ta">தமிழ் (Tamil)</string>
@@ -70,6 +72,29 @@
     <string name="profile_about_app">About FalconPlan</string>
     <string name="profile_app_info">FalconPlan v1.0 • Sri Lankan Community Tourism Platform</string>
     <string name="lang_switched_msg">Language updated to %s</string>
+
+    <!-- Profile Sections -->
+    <string name="profile_section_edit">Edit Profile</string>
+    <string name="profile_section_appearance">Appearance Theme</string>
+    <string name="profile_theme_light">Light Mode</string>
+    <string name="profile_theme_dark">Dark Mode</string>
+    <string name="profile_theme_system">Follow System</string>
+
+    <string name="profile_section_mode">Switch Account Mode</string>
+    <string name="profile_mode_traveler">Traveler Mode</string>
+    <string name="profile_mode_provider">Homestay Host / Provider Mode</string>
+    <string name="profile_provider_notice_title">Pending Provider Workspace</string>
+    <string name="profile_provider_notice_msg">Provider mode is active. Verification &amp; homestay listing tools will be enabled in Phase 4 upon KYC verification.</string>
+
+    <string name="profile_section_privacy">Privacy &amp; Security</string>
+    <string name="profile_privacy_info">Your profile data is protected by Cloud Firestore security rules. Privileged roles cannot be granted client-side.</string>
+
+    <!-- Edit Profile Screen -->
+    <string name="edit_profile_title">Edit Profile</string>
+    <string name="edit_profile_name_hint">Display Name</string>
+    <string name="edit_profile_email_hint">Email Address (Read-only)</string>
+    <string name="btn_save">Save Changes</string>
+    <string name="btn_cancel">Cancel</string>
 
     <!-- Dialogs & General -->
     <string name="placeholder_feature_title">Design Preview</string>

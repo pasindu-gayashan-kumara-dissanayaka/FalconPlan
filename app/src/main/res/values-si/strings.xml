@@ -1,0 +1,43 @@
+<resources>
+    <string name="app_name">FalconPlan</string>
+    <string name="app_tagline">ශ්‍රී ලංකා ග්‍රාමීය සංචාරක සහ නිවාස නවාතැන්</string>
+
+    <!-- Navigation Bar Labels -->
+    <string name="nav_community">සමාජය</string>
+    <string name="nav_explore">ගවේෂණය</string>
+    <string name="nav_plus">එක් කරන්න</string>
+    <string name="nav_plans">සැලසුම්</string>
+    <string name="nav_profile">ගිණුම</string>
+
+    <!-- Center Plus Bottom Sheet -->
+    <string name="plus_sheet_title">නව නිර්මාණයක්</string>
+    <string name="plus_sheet_subtitle">ඔබගේ ග්‍රාමීය සංචාරක අත්දැකීම් බෙදා ගන්න</string>
+    <string name="plus_sheet_story">කතාවක්</string>
+    <string name="plus_sheet_story_desc">ග්‍රාමීය සංස්කෘතික අත්දැකීමක් හෝ ඡායාරූප කතාවක්</string>
+    <string name="plus_sheet_travel_plan">සංචාරක සැලසුම</string>
+    <string name="plus_sheet_travel_plan_desc">ග්‍රාමීය සංචාරක සැලසුමක් සකස් කරන්න</string>
+    <string name="plus_sheet_post">සටහනක්</string>
+    <string name="plus_sheet_post_desc">ග්‍රාමීය සත්කාරකයන්ගෙන් ප්‍රශ්න අසන්න</string>
+
+    <!-- Welcome / Splash Screen -->
+    <string name="welcome_heading">ලංකාවේ ග්‍රාමීය ආගන්තුක සත්කාරය</string>
+    <string name="welcome_subtitle">ග්‍රාමීය ජනතාව සමග සෘජුව සම්බන්ධ වී, සත්‍ය ශ්‍රී ලාංකේය සංස්කෘතිය අත්විඳින්න.</string>
+    <string name="btn_get_started">ආරම්භ කරන්න</string>
+
+    <!-- Explore Screen -->
+    <string name="explore_greeting">ආයුබෝවන්!</string>
+    <string name="explore_heading">ලංකාවේ ග්‍රාමීය සිරිය ගවේෂණය කරන්න</string>
+    <string name="search_placeholder">ගම්මාන, නිවාස නවාතැන් සොයන්න&#8230;</string>
+    <string name="preview_badge_label">ආකෘති පෙරදසුන</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">ගිණුම සහ සැකසුම්</string>
+    <string name="profile_guest_name">ආයුබෝවන්, සංචාරකය</string>
+    <string name="profile_btn_signin">ඇතුළු වන්න / ලියාපදිංචි වන්න</string>
+    <string name="profile_btn_edit">තොරතුරු වෙනස් කරන්න</string>
+    <string name="profile_btn_signout">නික්මෙන්න</string>
+    <string name="profile_lang_title">යෙදුම් භාෂාව</string>
+
+    <string name="btn_close">වසා දමන්න</string>
+    <string name="btn_ok">හරි</string>
+</resources>
