@@ -36,25 +36,127 @@ describe("FalconPlan Firestore Security Rules", () => {
     await assertFails(aliceDb.doc("users/user_bob").get());
   });
 
-  test("User can create their own profile with valid activeMode (traveler/provider)", async () => {
+  test("User can create their own profile with valid schema (traveler mode)", async () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
     await assertSucceeds(aliceDb.doc("users/user_alice").set({
       uid: "user_alice",
       displayName: "Alice Silva",
       email: "alice@example.com",
+      photoUrl: "",
       activeMode: "traveler",
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000
     }));
   });
 
-  test("User CANNOT create profile with privileged roles (isAdmin/isVerified)", async () => {
+  test("User can create their own profile with valid schema (provider mode)", async () => {
+    const bobDb = testEnv.authenticatedContext("user_bob").firestore();
+    await assertSucceeds(bobDb.doc("users/user_bob").set({
+      uid: "user_bob",
+      displayName: "Bob Host",
+      email: "bob@example.com",
+      photoUrl: "",
+      activeMode: "provider",
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000
+    }));
+  });
+
+  test("User CANNOT create profile with unapproved fields (isAdmin/isVerified/kycStatus)", async () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
     await assertFails(aliceDb.doc("users/user_alice").set({
       uid: "user_alice",
       displayName: "Alice Silva",
+      email: "alice@example.com",
+      photoUrl: "",
       activeMode: "traveler",
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
       isAdmin: true
+    }));
+  });
+
+  test("User CANNOT create profile with invalid activeMode (e.g. admin)", async () => {
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("users/user_alice").set({
+      uid: "user_alice",
+      displayName: "Alice Silva",
+      email: "alice@example.com",
+      photoUrl: "",
+      activeMode: "admin",
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000
+    }));
+  });
+
+  test("User CANNOT create profile with mismatched UID in document", async () => {
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("users/user_alice").set({
+      uid: "user_bob",
+      displayName: "Alice Silva",
+      email: "alice@example.com",
+      photoUrl: "",
+      activeMode: "traveler",
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000
+    }));
+  });
+
+  test("User can update activeMode and updatedAt in their own profile", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("users/user_alice").set({
+        uid: "user_alice",
+        displayName: "Alice Silva",
+        email: "alice@example.com",
+        photoUrl: "",
+        activeMode: "traveler",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000
+      });
+    });
+
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertSucceeds(aliceDb.doc("users/user_alice").update({
+      activeMode: "provider",
+      updatedAt: 1700000005000
+    }));
+  });
+
+  test("User CANNOT alter immutable uid or createdAt on profile update", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("users/user_alice").set({
+        uid: "user_alice",
+        displayName: "Alice Silva",
+        email: "alice@example.com",
+        photoUrl: "",
+        activeMode: "traveler",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000
+      });
+    });
+
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("users/user_alice").update({
+      createdAt: 1800000000000
+    }));
+  });
+
+  test("User CANNOT inject privileged keys on profile update", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("users/user_alice").set({
+        uid: "user_alice",
+        displayName: "Alice Silva",
+        email: "alice@example.com",
+        photoUrl: "",
+        activeMode: "traveler",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000
+      });
+    });
+
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("users/user_alice").update({
+      isVerifiedProvider: true
     }));
   });
 

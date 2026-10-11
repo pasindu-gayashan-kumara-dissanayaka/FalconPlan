@@ -13,7 +13,22 @@ service cloud.firestore {
     }
 
     function isValidActiveMode(mode) {
-      return mode == 'traveler' || mode == 'provider';
+      return mode is string && (mode == 'traveler' || mode == 'provider');
+    }
+
+    function hasOnlyAllowedProfileKeys(data) {
+      return data.keys().hasOnly(['uid', 'displayName', 'email', 'photoUrl', 'activeMode', 'createdAt', 'updatedAt']);
+    }
+
+    function isValidProfileData(data) {
+      return hasOnlyAllowedProfileKeys(data)
+        && (data.uid is string)
+        && (data.displayName is string)
+        && (data.email is string)
+        && (data.photoUrl is string)
+        && isValidActiveMode(data.activeMode)
+        && (data.createdAt is number || data.createdAt is timestamp)
+        && (data.updatedAt is number || data.updatedAt is timestamp);
     }
 
     // User Profiles: users/{userId}
@@ -21,21 +36,19 @@ service cloud.firestore {
       // Authenticated users can only read their own profile
       allow read: if isOwner(userId);
 
-      // Creation allowed only for own UID, valid activeMode, and prohibits self-granting privileged roles
+      // Create: Owner only, strictly allowed keys, valid types, matching UID
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
-        && isValidActiveMode(request.resource.data.activeMode)
-        && !('isAdmin' in request.resource.data)
-        && !('isVerified' in request.resource.data)
-        && !('role' in request.resource.data);
+        && isValidProfileData(request.resource.data);
 
-      // Updates allowed only for own UID, valid activeMode, and cannot alter privileged fields
+      // Update: Owner only, strictly allowed keys, valid types, immutable UID & createdAt
       allow update: if isOwner(userId)
         && request.resource.data.uid == userId
-        && isValidActiveMode(request.resource.data.activeMode)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'isVerified', 'role']);
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isValidProfileData(request.resource.data);
 
-      // Prohibit deletion from client app
+      // Client-side delete prohibited
       allow delete: if false;
     }
 
