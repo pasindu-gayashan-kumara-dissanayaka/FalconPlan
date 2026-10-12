@@ -77,6 +77,95 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- ADMIN KYC REVIEW ENDPOINTS TESTS ---
+
+  test('GET /api/admin/kyc without admin claims returns 403 FORBIDDEN', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/admin/kyc', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'ordinary_user_123'
+      }
+    });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.json.code, 'FORBIDDEN');
+  });
+
+  test('GET /api/admin/kyc with admin claims returns 200 OK and paginated list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/admin/kyc', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('POST /api/admin/kyc/:providerUid/decision approve decision updates status to verified', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'approve' });
+
+    const res = await makeRequest('/api/admin/kyc/provider_user_123/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'verified');
+  });
+
+  test('POST /api/admin/kyc/:providerUid/decision reject decision without reason returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'reject' });
+
+    const res = await makeRequest('/api/admin/kyc/provider_user_123/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('POST /api/admin/kyc/:providerUid/decision reject decision with valid reason returns 200 OK', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'reject', reason: 'NIC back side image was unreadable.' });
+
+    const res = await makeRequest('/api/admin/kyc/provider_user_123/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'rejected');
+  });
+
   // --- KYC ENDPOINTS TESTS ---
 
   test('GET /api/provider/kyc/status returns provider KYC status', async () => {

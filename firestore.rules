@@ -156,6 +156,11 @@ service cloud.firestore {
       allow read, write: if false; // Deny direct client read and write; managed strictly via trusted Express Backend / Admin SDK
     }
 
+    // KYC Audit Logs: kycAuditLogs/{logId}
+    match /kycAuditLogs/{logId} {
+      allow read, write: if false; // Deny direct client read and write; append-only via trusted Express Backend / Admin SDK
+    }
+
     // Public Travel Plans Collection: publicTravelPlans/{planId}
     match /publicTravelPlans/{planId} {
       allow read, write: if false; // Deny direct client read and write; all public plan browsing uses trusted backend

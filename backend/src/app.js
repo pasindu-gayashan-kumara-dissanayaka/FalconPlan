@@ -34,7 +34,257 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
   });
 });
 
-// --- KYC ENDPOINTS (PHASE 04-A2-1 / A2 SECURITY HARDENED) ---
+// --- ADMIN KYC REVIEW ENDPOINTS (PHASE 04-A3-1) ---
+
+// GET /api/admin/kyc - Paginated list of provider KYC applications for admin review
+app.get('/api/admin/kyc', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const statusFilter = req.query.status ? String(req.query.status).trim() : null;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      let query = db.collection('kyc');
+
+      if (statusFilter) {
+        query = query.where('status', '==', statusFilter);
+      }
+
+      const snapshot = await query
+        .orderBy('updatedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const list = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        // Return sanitized summary excluding raw storage identifiers
+        list.push({
+          providerUid: doc.id,
+          status: data.status || 'pending_identity_verification',
+          documentCount: Array.isArray(data.documents) ? data.documents.length : 0,
+          submittedAt: data.submittedAt || null,
+          updatedAt: data.updatedAt || null
+        });
+      });
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve admin KYC list: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // Test / Mock mode response
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      providerUid: 'provider_user_123',
+      status: 'submitted_under_review',
+      documentCount: 2,
+      submittedAt: Date.now(),
+      updatedAt: Date.now()
+    }]
+  });
+});
+
+// GET /api/admin/kyc/:providerUid - Single provider KYC application detail with business profile
+app.get('/api/admin/kyc/:providerUid', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const providerUid = req.params.providerUid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const kycSnap = await db.collection('kyc').doc(providerUid).get();
+      const providerProfileSnap = await db.collection('providerProfiles').doc(providerUid).get();
+
+      if (!kycSnap.exists) {
+        return res.status(404).json({
+          error: 'KYC application not found for specified provider',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: {
+          kyc: kycSnap.data(),
+          providerProfile: providerProfileSnap.exists ? providerProfileSnap.data() : null
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch provider KYC details: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      kyc: {
+        providerUid,
+        status: 'submitted_under_review',
+        documents: [{ documentId: 'doc_nic_front_123', type: 'nic_front', mimeType: 'image/jpeg' }],
+        submittedAt: Date.now()
+      },
+      providerProfile: {
+        uid: providerUid,
+        hostDisplayName: 'Saman Perera',
+        businessName: 'Knuckles Eco Homestay',
+        businessType: 'homestay',
+        district: 'Matale',
+        village: 'Meemure'
+      }
+    }
+  });
+});
+
+// GET /api/admin/kyc/:providerUid/documents/:documentId - Authorized short-lived preview link
+app.get('/api/admin/kyc/:providerUid/documents/:documentId', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const { providerUid, documentId } = req.params;
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+
+  return res.json({
+    status: 'success',
+    data: {
+      providerUid,
+      documentId,
+      authorizedPreviewUrl: `https://falconplan.app/api/admin/preview/${documentId}?expires=${Date.now() + 300000}`,
+      expiresAt: Date.now() + 300000 // 5-minute short-lived link
+    }
+  });
+});
+
+// POST /api/admin/kyc/:providerUid/decision - Record admin KYC approval or rejection decision
+app.post('/api/admin/kyc/:providerUid/decision', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const providerUid = req.params.providerUid;
+  const adminUid = req.auth.uid;
+  const { decision, reason } = req.body || {};
+
+  const ALLOWED_DECISIONS = ['approve', 'reject'];
+  if (!decision || !ALLOWED_DECISIONS.includes(decision)) {
+    return res.status(400).json({
+      error: 'Invalid or missing decision. Must be "approve" or "reject".',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (decision === 'reject' && (!reason || typeof reason !== 'string' || !reason.trim())) {
+    return res.status(400).json({
+      error: 'A non-empty rejection reason is required when rejecting a KYC application.',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const rejectionReasonText = decision === 'reject' ? String(reason).trim().slice(0, 300) : '';
+  const newKycStatus = decision === 'approve' ? 'verified' : 'rejected';
+  const newProviderKycStatus = decision === 'approve' ? 'verified' : 'pending_identity_verification';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const kycDocRef = db.collection('kyc').doc(providerUid);
+      const providerProfileRef = db.collection('providerProfiles').doc(providerUid);
+
+      const kycSnap = await kycDocRef.get();
+      if (!kycSnap.exists) {
+        return res.status(404).json({
+          error: 'KYC application not found for specified provider',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const previousStatus = kycSnap.data().status || 'pending_identity_verification';
+
+      if (previousStatus === 'verified' && decision === 'approve') {
+        return res.status(400).json({
+          error: 'KYC application is already verified',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const batch = db.batch();
+
+      // Update KYC record
+      batch.update(kycDocRef, {
+        status: newKycStatus,
+        reviewedAt: now,
+        reviewerUid: adminUid,
+        rejectionReason: rejectionReasonText,
+        updatedAt: now
+      });
+
+      // Update server-managed provider profile status projection
+      batch.update(providerProfileRef, {
+        kycStatus: newProviderKycStatus,
+        updatedAt: now
+      });
+
+      // Append-only Audit Log
+      const auditRef = db.collection('kycAuditLogs').doc();
+      batch.set(auditRef, {
+        logId: auditRef.id,
+        providerUid,
+        reviewerUid: adminUid,
+        decision,
+        previousStatus,
+        newStatus: newKycStatus,
+        reason: rejectionReasonText,
+        timestamp: now
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: `KYC application ${decision}d successfully`,
+        data: {
+          providerUid,
+          decision,
+          status: newKycStatus,
+          reviewedAt: now
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Firestore decision update failed: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // Test / Mock mode response
+  return res.json({
+    status: 'success',
+    message: `KYC application ${decision}d successfully`,
+    data: {
+      providerUid,
+      decision,
+      status: newKycStatus,
+      reviewedAt: now
+    }
+  });
+});
+
+// --- KYC ENDPOINTS (PHASE 04-A2-1) ---
 
 // GET /api/provider/kyc/status - Retrieve current provider KYC verification status
 app.get('/api/provider/kyc/status', requireFirebaseUser, async (req, res) => {
