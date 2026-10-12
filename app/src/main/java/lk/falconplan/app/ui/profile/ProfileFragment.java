@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -21,15 +20,21 @@ import com.google.firebase.auth.FirebaseUser;
 import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
 import lk.falconplan.app.data.common.Resource;
+import lk.falconplan.app.data.model.ProviderProfile;
 import lk.falconplan.app.data.model.UserProfile;
+import lk.falconplan.app.data.repository.ProviderProfileRepository;
+import lk.falconplan.app.data.repository.ProviderProfileRepositoryImpl;
 import lk.falconplan.app.ui.auth.AuthEntryFragment;
 import lk.falconplan.app.ui.auth.AuthViewModel;
+import lk.falconplan.app.ui.provider.ProviderRegistrationFragment;
+import lk.falconplan.app.ui.provider.ProviderSetupStatusFragment;
 import lk.falconplan.app.utils.AppPreferences;
 import lk.falconplan.app.utils.LocaleHelper;
 
 public class ProfileFragment extends Fragment {
 
     private AuthViewModel authViewModel;
+    private ProviderProfileRepository providerProfileRepository;
 
     private View cardSignedInProfile;
     private View cardGuestProfile;
@@ -55,6 +60,7 @@ public class ProfileFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         authViewModel = new ViewModelProvider(requireActivity()).get(AuthViewModel.class);
+        providerProfileRepository = new ProviderProfileRepositoryImpl();
 
         cardSignedInProfile = view.findViewById(R.id.cardSignedInProfile);
         cardGuestProfile = view.findViewById(R.id.cardGuestProfile);
@@ -83,11 +89,18 @@ public class ProfileFragment extends Fragment {
             }
         });
 
+        cardProviderNotice.setOnClickListener(v -> openProviderWorkspace());
+
         toggleGroupMode.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (!isChecked) return;
-            String newMode = (checkedId == R.id.btnModeProvider) ? UserProfile.MODE_PROVIDER : UserProfile.MODE_TRAVELER;
-            authViewModel.updateActiveMode(newMode);
-            cardProviderNotice.setVisibility(R.id.btnModeProvider == checkedId ? View.VISIBLE : View.GONE);
+            if (checkedId == R.id.btnModeProvider) {
+                authViewModel.updateActiveMode(UserProfile.MODE_PROVIDER);
+                cardProviderNotice.setVisibility(View.VISIBLE);
+                openProviderWorkspace();
+            } else {
+                authViewModel.updateActiveMode(UserProfile.MODE_TRAVELER);
+                cardProviderNotice.setVisibility(View.GONE);
+            }
         });
 
         // Initialize Appearance Selection
@@ -157,6 +170,31 @@ public class ProfileFragment extends Fragment {
                 } else {
                     toggleGroupMode.check(R.id.btnModeTraveler);
                     cardProviderNotice.setVisibility(View.GONE);
+                }
+            }
+        });
+    }
+
+    private void openProviderWorkspace() {
+        FirebaseUser user = authViewModel.getCurrentUser();
+        if (user == null) return;
+
+        providerProfileRepository.getProviderProfile(user.getUid(), new ProviderProfileRepository.ProfileCallback() {
+            @Override
+            public void onSuccess(ProviderProfile profile) {
+                if (getActivity() instanceof MainActivity) {
+                    if (profile != null) {
+                        ((MainActivity) getActivity()).loadMainContentFragment(ProviderSetupStatusFragment.newInstance(), true);
+                    } else {
+                        ((MainActivity) getActivity()).loadMainContentFragment(ProviderRegistrationFragment.newInstance(), true);
+                    }
+                }
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(ProviderRegistrationFragment.newInstance(), true);
                 }
             }
         });
