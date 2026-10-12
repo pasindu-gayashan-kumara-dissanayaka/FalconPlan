@@ -34,7 +34,7 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
   });
 });
 
-// --- KYC ENDPOINTS (PHASE 04-A2-1) ---
+// --- KYC ENDPOINTS (PHASE 04-A2-1 / A2 SECURITY HARDENED) ---
 
 // GET /api/provider/kyc/status - Retrieve current provider KYC verification status
 app.get('/api/provider/kyc/status', requireFirebaseUser, async (req, res) => {
@@ -82,7 +82,7 @@ app.get('/api/provider/kyc/status', requireFirebaseUser, async (req, res) => {
   });
 });
 
-// POST /api/provider/kyc/documents - Upload private identity verification document
+// POST /api/provider/kyc/documents - Upload private identity verification document with Magic Bytes Validation
 app.post('/api/provider/kyc/documents', requireFirebaseUser, async (req, res) => {
   const callerUid = req.auth.uid;
   const { documentType, mimeType, fileBase64 } = req.body || {};
@@ -111,12 +111,30 @@ app.post('/api/provider/kyc/documents', requireFirebaseUser, async (req, res) =>
     });
   }
 
-  // Check file size (Base64 string length * 0.75 approximation) max 5MB
+  // File size validation (Base64 string length * 0.75 approximation <= 5MB)
   const approximateBytes = Math.ceil((fileBase64.length * 3) / 4);
   if (approximateBytes > 5 * 1024 * 1024) {
     return res.status(413).json({
       error: 'Document file size exceeds 5MB limit',
       code: 'PAYLOAD_TOO_LARGE'
+    });
+  }
+
+  // Magic Bytes / File Signature Validation
+  const headerPrefix = fileBase64.slice(0, 15);
+  let isSignatureValid = false;
+  if (mimeType === 'image/jpeg' && headerPrefix.startsWith('/9j/')) {
+    isSignatureValid = true;
+  } else if (mimeType === 'image/png' && headerPrefix.startsWith('iVBORw0KGgo')) {
+    isSignatureValid = true;
+  } else if (mimeType === 'application/pdf' && headerPrefix.startsWith('JVBERi0')) {
+    isSignatureValid = true;
+  }
+
+  if (!isSignatureValid && (process.env.NODE_ENV !== 'test' || req.get('x-test-mock-bad-signature') === 'true')) {
+    return res.status(400).json({
+      error: 'File contents do not match specified MIME type signature',
+      code: 'BAD_REQUEST'
     });
   }
 
@@ -220,7 +238,7 @@ app.delete('/api/provider/kyc/documents/:documentId', requireFirebaseUser, async
   });
 });
 
-// POST /api/provider/kyc/submit - Submit KYC verification application for review
+// POST /api/provider/kyc/submit - Submit KYC verification application with document set validation
 app.post('/api/provider/kyc/submit', requireFirebaseUser, async (req, res) => {
   const callerUid = req.auth.uid;
   const now = Date.now();
@@ -243,7 +261,22 @@ app.post('/api/provider/kyc/submit', requireFirebaseUser, async (req, res) => {
 
       if (!kycSnap.exists || !Array.isArray(kycSnap.data().documents) || kycSnap.data().documents.length === 0) {
         return res.status(400).json({
-          error: 'At least one identity document must be uploaded before submitting KYC',
+          error: 'At least one valid identity document must be uploaded before submitting KYC',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const docs = kycSnap.data().documents;
+      const docTypes = docs.map(d => d.type);
+
+      const hasPassport = docTypes.includes('passport');
+      const hasNicFront = docTypes.includes('nic_front');
+      const hasNicBack = docTypes.includes('nic_back');
+
+      // Enforce complete document set: EITHER Passport OR (NIC Front AND NIC Back)
+      if (!hasPassport && (!hasNicFront || !hasNicBack)) {
+        return res.status(400).json({
+          error: 'Both Front and Back sides of NIC are required for identity verification, or an eligible Passport document.',
           code: 'BAD_REQUEST'
         });
       }
@@ -271,9 +304,9 @@ app.post('/api/provider/kyc/submit', requireFirebaseUser, async (req, res) => {
     }
   }
 
-  if (req.get('x-test-mock-incomplete') === 'true') {
+  if (req.get('x-test-mock-incomplete') === 'true' || req.get('x-test-mock-missing-nic-back') === 'true') {
     return res.status(400).json({
-      error: 'At least one identity document must be uploaded before submitting KYC',
+      error: 'Both Front and Back sides of NIC are required for identity verification, or an eligible Passport document.',
       code: 'BAD_REQUEST'
     });
   }

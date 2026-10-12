@@ -31,11 +31,12 @@ import java.util.concurrent.Executors;
 
 import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
-import lk.falconplan.app.data.remote.BackendApiClient;
+import lk.falconplan.app.data.repository.KycRepository;
+import lk.falconplan.app.data.repository.KycRepositoryImpl;
 
 public class ProviderKycFragment extends Fragment {
 
-    private BackendApiClient apiClient;
+    private KycRepository kycRepository;
     private ExecutorService executor;
 
     private RadioGroup radioGroupDocType;
@@ -78,7 +79,7 @@ public class ProviderKycFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        apiClient = BackendApiClient.getInstance();
+        kycRepository = new KycRepositoryImpl();
         executor = Executors.newSingleThreadExecutor();
 
         radioGroupDocType = view.findViewById(R.id.radioGroupDocType);
@@ -131,7 +132,7 @@ public class ProviderKycFragment extends Fragment {
         progressBar.setVisibility(View.VISIBLE);
         user.getIdToken(true).addOnCompleteListener(task -> {
             String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
-            apiClient.getKycStatus(idToken, new BackendApiClient.ApiCallback<JSONObject>() {
+            kycRepository.getKycStatus(idToken, new KycRepository.KycStatusCallback() {
                 @Override
                 public void onSuccess(JSONObject result) {
                     progressBar.setVisibility(View.GONE);
@@ -203,7 +204,7 @@ public class ProviderKycFragment extends Fragment {
                 String finalMimeType = mimeType;
                 user.getIdToken(true).addOnCompleteListener(task -> {
                     String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
-                    apiClient.uploadKycDocument(idToken, selectedPendingDocType, finalMimeType, base64Str, new BackendApiClient.ApiCallback<JSONObject>() {
+                    kycRepository.uploadDocument(idToken, selectedPendingDocType, finalMimeType, base64Str, new KycRepository.UploadCallback() {
                         @Override
                         public void onSuccess(JSONObject result) {
                             progressBar.setVisibility(View.GONE);
@@ -256,7 +257,7 @@ public class ProviderKycFragment extends Fragment {
         progressBar.setVisibility(View.VISIBLE);
         user.getIdToken(true).addOnCompleteListener(task -> {
             String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
-            apiClient.submitKycApplication(idToken, new BackendApiClient.ApiCallback<JSONObject>() {
+            kycRepository.submitKycApplication(idToken, new KycRepository.KycStatusCallback() {
                 @Override
                 public void onSuccess(JSONObject result) {
                     progressBar.setVisibility(View.GONE);
