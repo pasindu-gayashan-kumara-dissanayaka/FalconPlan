@@ -50,6 +50,173 @@ public class BackendApiClient {
         return instance;
     }
 
+    // --- KYC BACKEND METHODS ---
+
+    public void getKycStatus(String idToken, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "provider/kyc/status");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(3000);
+                    conn.setReadTimeout(3000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    public void uploadKycDocument(String idToken, String documentType, String mimeType, String fileBase64, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "provider/kyc/documents");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(8000);
+                    conn.setDoOutput(true);
+
+                    JSONObject jsonBody = new JSONObject();
+                    jsonBody.put("documentType", documentType);
+                    jsonBody.put("mimeType", mimeType);
+                    jsonBody.put("fileBase64", fileBase64);
+
+                    try (OutputStream os = conn.getOutputStream()) {
+                        byte[] input = jsonBody.toString().getBytes(StandardCharsets.UTF_8);
+                        os.write(input, 0, input.length);
+                    }
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    public void deleteKycDocument(String idToken, String documentId, ApiCallback<Void> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "provider/kyc/documents/" + documentId);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("DELETE");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(3000);
+                    conn.setReadTimeout(3000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        mainHandler.post(() -> callback.onSuccess(null));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    public void submitKycApplication(String idToken, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "provider/kyc/submit");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(3000);
+                    conn.setReadTimeout(3000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    // --- TRAVEL PLAN METHODS ---
+
     public void publishPlan(String idToken, TravelPlan plan, List<TravelPlanStop> stops, String ownerDisplayName, ApiCallback<PublicTravelPlan> callback) {
         executor.execute(() -> {
             Exception lastException = null;

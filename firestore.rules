@@ -151,6 +151,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // KYC Document Records: kyc/{userId}
+    match /kyc/{userId} {
+      allow read, write: if false; // Deny direct client read and write; managed strictly via trusted Express Backend / Admin SDK
+    }
+
     // Public Travel Plans Collection: publicTravelPlans/{planId}
     match /publicTravelPlans/{planId} {
       allow read, write: if false; // Deny direct client read and write; all public plan browsing uses trusted backend

@@ -9,7 +9,7 @@ const app = express();
 
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({ limit: '5mb' })); // Allows base64 encoded document uploads up to 5MB
 
 // Health Check Endpoint (Public)
 app.get('/api/health', (req, res) => {
@@ -33,6 +33,263 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
     }
   });
 });
+
+// --- KYC ENDPOINTS (PHASE 04-A2-1) ---
+
+// GET /api/provider/kyc/status - Retrieve current provider KYC verification status
+app.get('/api/provider/kyc/status', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const kycDocRef = db.collection('kyc').doc(callerUid);
+      const kycSnap = await kycDocRef.get();
+
+      if (!kycSnap.exists) {
+        return res.json({
+          status: 'success',
+          data: {
+            providerUid: callerUid,
+            status: 'pending_identity_verification',
+            documents: [],
+            submittedAt: null
+          }
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: kycSnap.data()
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch KYC status: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // Test / Mock mode response
+  return res.json({
+    status: 'success',
+    data: {
+      providerUid: callerUid,
+      status: 'pending_identity_verification',
+      documents: [],
+      submittedAt: null
+    }
+  });
+});
+
+// POST /api/provider/kyc/documents - Upload private identity verification document
+app.post('/api/provider/kyc/documents', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { documentType, mimeType, fileBase64 } = req.body || {};
+
+  const ALLOWED_TYPES = ['nic_front', 'nic_back', 'passport', 'proof_of_address'];
+  const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'application/pdf'];
+
+  if (!documentType || !ALLOWED_TYPES.includes(documentType)) {
+    return res.status(400).json({
+      error: 'Invalid or missing documentType. Must be one of: ' + ALLOWED_TYPES.join(', '),
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (!mimeType || !ALLOWED_MIMES.includes(mimeType)) {
+    return res.status(400).json({
+      error: 'Invalid or missing mimeType. Must be one of: ' + ALLOWED_MIMES.join(', '),
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (!fileBase64 || typeof fileBase64 !== 'string' || fileBase64.length < 50) {
+    return res.status(400).json({
+      error: 'Invalid or missing document content',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  // Check file size (Base64 string length * 0.75 approximation) max 5MB
+  const approximateBytes = Math.ceil((fileBase64.length * 3) / 4);
+  if (approximateBytes > 5 * 1024 * 1024) {
+    return res.status(413).json({
+      error: 'Document file size exceeds 5MB limit',
+      code: 'PAYLOAD_TOO_LARGE'
+    });
+  }
+
+  const documentId = 'doc_' + documentType + '_' + Date.now();
+  const now = Date.now();
+
+  const docMetadata = {
+    documentId,
+    type: documentType,
+    mimeType,
+    uploadedAt: now,
+    storagePath: `kyc_private/${callerUid}/${documentId}`
+  };
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const kycDocRef = db.collection('kyc').doc(callerUid);
+
+      await db.runTransaction(async (transaction) => {
+        const kycSnap = await transaction.get(kycDocRef);
+        let existingDocs = [];
+        let currentStatus = 'pending_identity_verification';
+
+        if (kycSnap.exists) {
+          const data = kycSnap.data();
+          existingDocs = Array.isArray(data.documents) ? data.documents : [];
+          currentStatus = data.status || currentStatus;
+        }
+
+        // Replace existing document of same type if present
+        const filteredDocs = existingDocs.filter(d => d.type !== documentType);
+        filteredDocs.push(docMetadata);
+
+        transaction.set(kycDocRef, {
+          providerUid: callerUid,
+          status: currentStatus,
+          documents: filteredDocs,
+          updatedAt: now,
+          createdAt: kycSnap.exists ? (kycSnap.data().createdAt || now) : now
+        }, { merge: true });
+      });
+
+      return res.json({
+        status: 'success',
+        data: docMetadata
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to record KYC document: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: docMetadata
+  });
+});
+
+// DELETE /api/provider/kyc/documents/:documentId - Delete uploaded KYC document
+app.delete('/api/provider/kyc/documents/:documentId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const documentId = req.params.documentId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const kycDocRef = db.collection('kyc').doc(callerUid);
+      const kycSnap = await kycDocRef.get();
+
+      if (kycSnap.exists) {
+        const data = kycSnap.data();
+        const existingDocs = Array.isArray(data.documents) ? data.documents : [];
+        const updatedDocs = existingDocs.filter(d => d.documentId !== documentId);
+
+        await kycDocRef.update({
+          documents: updatedDocs,
+          updatedAt: Date.now()
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        message: 'Document deleted successfully',
+        documentId
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to delete KYC document: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Document deleted successfully',
+    documentId
+  });
+});
+
+// POST /api/provider/kyc/submit - Submit KYC verification application for review
+app.post('/api/provider/kyc/submit', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+
+      // Confirm provider registration exists first
+      const providerProfileSnap = await db.collection('providerProfiles').doc(callerUid).get();
+      if (!providerProfileSnap.exists) {
+        return res.status(400).json({
+          error: 'Provider profile registration required before submitting KYC',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const kycDocRef = db.collection('kyc').doc(callerUid);
+      const kycSnap = await kycDocRef.get();
+
+      if (!kycSnap.exists || !Array.isArray(kycSnap.data().documents) || kycSnap.data().documents.length === 0) {
+        return res.status(400).json({
+          error: 'At least one identity document must be uploaded before submitting KYC',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      await kycDocRef.update({
+        status: 'submitted_under_review',
+        submittedAt: now,
+        updatedAt: now
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'KYC application submitted for review',
+        data: {
+          providerUid: callerUid,
+          status: 'submitted_under_review',
+          submittedAt: now
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'KYC submission failed: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-incomplete') === 'true') {
+    return res.status(400).json({
+      error: 'At least one identity document must be uploaded before submitting KYC',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'KYC application submitted for review',
+    data: {
+      providerUid: callerUid,
+      status: 'submitted_under_review',
+      submittedAt: now
+    }
+  });
+});
+
+// --- PUBLIC TRAVEL PLANS ENDPOINTS ---
 
 // POST /api/plans/:planId/publish - Publish a private plan securely
 app.post('/api/plans/:planId/publish', requireFirebaseUser, async (req, res) => {
@@ -360,7 +617,7 @@ app.use('/api', (req, res) => {
 app.use((err, req, res, _next) => {
   if (err && err.type === 'entity.too.large') {
     return res.status(413).json({
-      error: 'Request body exceeds 64kb limit',
+      error: 'Request body exceeds 5MB limit',
       code: 'PAYLOAD_TOO_LARGE'
     });
   }

@@ -77,6 +77,101 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- KYC ENDPOINTS TESTS ---
+
+  test('GET /api/provider/kyc/status returns provider KYC status', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/kyc/status', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.providerUid, 'provider_user_123');
+    assert.equal(res.json.data.status, 'pending_identity_verification');
+  });
+
+  test('POST /api/provider/kyc/documents uploads document and returns metadata', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      documentType: 'nic_front',
+      mimeType: 'image/jpeg',
+      fileBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    });
+
+    const res = await makeRequest('/api/provider/kyc/documents', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.type, 'nic_front');
+    assert.ok(res.json.data.documentId);
+  });
+
+  test('POST /api/provider/kyc/documents with invalid documentType returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      documentType: 'hacked_doc_type',
+      mimeType: 'image/jpeg',
+      fileBase64: 'valid_base64_string_data_placeholder_here_12345678901234567890'
+    });
+
+    const res = await makeRequest('/api/provider/kyc/documents', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('DELETE /api/provider/kyc/documents/:documentId deletes document', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/kyc/documents/doc_nic_front_123', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.documentId, 'doc_nic_front_123');
+  });
+
+  test('POST /api/provider/kyc/submit updates KYC status to submitted_under_review', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/kyc/submit', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'submitted_under_review');
+  });
+
+  // --- PUBLIC TRAVEL PLANS ENDPOINTS TESTS ---
+
   test('POST /api/plans/:planId/publish publishes sanitized public plan and strips private notes', async () => {
     process.env.NODE_ENV = 'test';
     const payload = JSON.stringify({
@@ -202,7 +297,7 @@ describe('FalconPlan Backend API & Security Tests', () => {
   });
 
   test('POST /api/me with oversized payload returns 413 Payload Too Large', async () => {
-    const largeBody = JSON.stringify({ data: 'a'.repeat(70000) });
+    const largeBody = JSON.stringify({ data: 'a'.repeat(6000000) });
     const res = await makeRequest('/api/me', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

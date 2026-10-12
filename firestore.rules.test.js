@@ -1,5 +1,5 @@
 /**
- * Security Rules Contract Tests for FalconPlan (Profile + SavedPlaces + TravelPlans + ProviderProfiles)
+ * Security Rules Contract Tests for FalconPlan (Profile + SavedPlaces + TravelPlans + ProviderProfiles + KYC)
  * Tested with @firebase/rules-unit-testing
  */
 
@@ -90,6 +90,15 @@ describe("FalconPlan Firestore Security Rules", () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
     await assertFails(aliceDb.doc("providerProfiles/user_alice").update({
       kycStatus: "verified" // Privilege escalation attempt DENIED!
+    }));
+  });
+
+  test("Direct client-side read and write to kyc/{userId} is DENIED", async () => {
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("kyc/user_alice").get());
+    await assertFails(aliceDb.doc("kyc/user_alice").set({
+      providerUid: "user_alice",
+      status: "verified"
     }));
   });
 
