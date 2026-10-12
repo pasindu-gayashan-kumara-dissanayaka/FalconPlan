@@ -72,7 +72,7 @@ public class ProfileFragment extends Fragment {
 
         view.findViewById(R.id.btnEditProfile).setOnClickListener(v -> {
             if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).loadAuthFragment(new EditProfileFragment(), true);
+                ((MainActivity) getActivity()).loadMainContentFragment(new EditProfileFragment(), true);
             }
         });
 

@@ -138,7 +138,7 @@ public class CreatePlanFragment extends Fragment {
                 progressBar.setVisibility(View.GONE);
                 Toast.makeText(requireContext(), "Travel Plan Created!", Toast.LENGTH_SHORT).show();
                 if (getActivity() instanceof MainActivity) {
-                    ((MainActivity) getActivity()).loadAuthFragment(PlanDetailFragment.newInstance(plan.getId()), false);
+                    ((MainActivity) getActivity()).loadMainContentFragment(PlanDetailFragment.newInstance(plan.getId()), false);
                 }
             }
 

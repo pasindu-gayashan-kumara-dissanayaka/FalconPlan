@@ -71,7 +71,7 @@ public class ExploreFragment extends Fragment {
             @Override
             public void onDestinationClick(Destination destination) {
                 if (getActivity() instanceof MainActivity) {
-                    ((MainActivity) getActivity()).loadAuthFragment(
+                    ((MainActivity) getActivity()).loadMainContentFragment(
                             DestinationDetailFragment.newInstance(destination.getId()), true
                     );
                 }
@@ -85,7 +85,7 @@ public class ExploreFragment extends Fragment {
 
         view.findViewById(R.id.btnSavedPlaces).setOnClickListener(v -> {
             if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).loadAuthFragment(new SavedPlacesFragment(), true);
+                ((MainActivity) getActivity()).loadMainContentFragment(new SavedPlacesFragment(), true);
             }
         });
 

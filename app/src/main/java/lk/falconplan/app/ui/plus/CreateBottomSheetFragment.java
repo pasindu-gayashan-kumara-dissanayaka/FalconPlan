@@ -44,7 +44,7 @@ public class CreateBottomSheetFragment extends BottomSheetDialogFragment {
         view.findViewById(R.id.cardOptionTravelPlan).setOnClickListener(v -> {
             dismiss();
             if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).loadAuthFragment(new CreatePlanFragment(), true);
+                ((MainActivity) getActivity()).loadMainContentFragment(new CreatePlanFragment(), true);
             }
         });
 
