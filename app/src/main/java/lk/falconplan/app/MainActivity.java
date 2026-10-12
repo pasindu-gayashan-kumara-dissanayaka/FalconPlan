@@ -148,6 +148,12 @@ public class MainActivity extends AppCompatActivity {
         loadFragment(fragment, addToBackStack);
     }
 
+    public void loadMainContentFragment(Fragment fragment, boolean addToBackStack) {
+        bottomNavigation.setVisibility(View.VISIBLE);
+        setContainerBottomMargin((int) (64 * getResources().getDisplayMetrics().density));
+        loadFragment(fragment, addToBackStack);
+    }
+
     private void setupBottomNavigation() {
         bottomNavigation.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();

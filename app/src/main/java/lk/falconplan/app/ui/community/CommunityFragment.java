@@ -88,7 +88,7 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
     @Override
     public void onViewClick(PublicTravelPlan plan) {
         if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).loadAuthFragment(
+            ((MainActivity) getActivity()).loadMainContentFragment(
                     PublicPlanDetailFragment.newInstance(plan.getPublicPlanId()), true
             );
         }

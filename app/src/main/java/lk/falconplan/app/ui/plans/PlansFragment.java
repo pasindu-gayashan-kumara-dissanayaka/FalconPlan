@@ -60,7 +60,7 @@ public class PlansFragment extends Fragment implements PlanAdapter.OnPlanClickLi
 
         View.OnClickListener createListener = v -> {
             if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).loadAuthFragment(new CreatePlanFragment(), true);
+                ((MainActivity) getActivity()).loadMainContentFragment(new CreatePlanFragment(), true);
             }
         };
 
@@ -104,7 +104,7 @@ public class PlansFragment extends Fragment implements PlanAdapter.OnPlanClickLi
     @Override
     public void onPlanClick(TravelPlan plan) {
         if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).loadAuthFragment(PlanDetailFragment.newInstance(plan.getId()), true);
+            ((MainActivity) getActivity()).loadMainContentFragment(PlanDetailFragment.newInstance(plan.getId()), true);
         }
     }
 }
