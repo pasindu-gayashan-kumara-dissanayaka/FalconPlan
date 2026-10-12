@@ -120,7 +120,8 @@ service cloud.firestore {
     match /providerProfiles/{userId} {
       allow read: if isOwner(userId);
 
-      allow create, update: if isOwner(userId)
+      // Create: Owner only, kycStatus MUST BE strictly 'pending_identity_verification'
+      allow create: if isOwner(userId)
         && request.resource.data.keys().hasOnly(['uid', 'hostDisplayName', 'businessName', 'businessType', 'district', 'village', 'shortDescription', 'contactPhone', 'kycStatus', 'createdAt', 'updatedAt'])
         && request.resource.data.uid == userId
         && request.resource.data.hostDisplayName is string && request.resource.data.hostDisplayName.size() > 0 && request.resource.data.hostDisplayName.size() <= 100
@@ -130,15 +131,29 @@ service cloud.firestore {
         && request.resource.data.village is string && request.resource.data.village.size() > 0
         && request.resource.data.shortDescription is string && request.resource.data.shortDescription.size() <= 500
         && request.resource.data.contactPhone is string
-        && (request.resource.data.kycStatus == 'pending_identity_verification' || request.resource.data.kycStatus == 'verified');
+        && request.resource.data.kycStatus == 'pending_identity_verification';
+
+      // Update: Owner only, kycStatus MUST BE IMMUTABLE (cannot be modified or escalated client-side)
+      allow update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['uid', 'hostDisplayName', 'businessName', 'businessType', 'district', 'village', 'shortDescription', 'contactPhone', 'kycStatus', 'createdAt', 'updatedAt'])
+        && request.resource.data.uid == userId
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.kycStatus == resource.data.kycStatus
+        && request.resource.data.hostDisplayName is string && request.resource.data.hostDisplayName.size() > 0 && request.resource.data.hostDisplayName.size() <= 100
+        && request.resource.data.businessName is string && request.resource.data.businessName.size() > 0 && request.resource.data.businessName.size() <= 100
+        && (request.resource.data.businessType == 'homestay' || request.resource.data.businessType == 'experience' || request.resource.data.businessType == 'both')
+        && request.resource.data.district is string && request.resource.data.district.size() > 0
+        && request.resource.data.village is string && request.resource.data.village.size() > 0
+        && request.resource.data.shortDescription is string && request.resource.data.shortDescription.size() <= 500
+        && request.resource.data.contactPhone is string;
 
       allow delete: if false;
     }
 
     // Public Travel Plans Collection: publicTravelPlans/{planId}
     match /publicTravelPlans/{planId} {
-      allow read: if isSignedIn();
-      allow write: if false; // Managed via trusted Admin SDK / backend
+      allow read, write: if false; // Deny direct client read and write; all public plan browsing uses trusted backend
     }
 
     // Deny read and write access to all other collections by default
