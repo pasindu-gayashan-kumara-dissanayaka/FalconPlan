@@ -77,6 +77,120 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- PROVIDER LISTING PHOTO ENDPOINTS TESTS ---
+
+  test('GET /api/provider/listings/:listingId/photos returns photos list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/listings/listing_123/photos', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('POST /api/provider/listings/:listingId/photos uploads listing photo and returns metadata', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      mimeType: 'image/jpeg',
+      fileBase64: '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP123456789012345678901234567890',
+      isCover: true
+    });
+
+    const res = await makeRequest('/api/provider/listings/listing_123/photos', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.mimeType, 'image/jpeg');
+    assert.ok(res.json.data.photoId);
+  });
+
+  test('POST /api/provider/listings/:listingId/photos exceeding 10 max photos limit returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      mimeType: 'image/jpeg',
+      fileBase64: '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP123456789012345678901234567890'
+    });
+
+    const res = await makeRequest('/api/provider/listings/listing_123/photos', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123',
+        'x-test-mock-max-exceeded': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('PATCH /api/provider/listings/:listingId/photos/reorder reorders photos', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      photoOrder: ['photo_2', 'photo_1']
+    });
+
+    const res = await makeRequest('/api/provider/listings/listing_123/photos/reorder', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('PATCH /api/provider/listings/:listingId/photos/:photoId/cover sets cover photo', async () => {
+    process.env.NODE_ENV = 'test';
+
+    const res = await makeRequest('/api/provider/listings/listing_123/photos/photo_123/cover', {
+      method: 'PATCH',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.coverPhotoId, 'photo_123');
+  });
+
+  test('DELETE /api/provider/listings/:listingId/photos/:photoId deletes listing photo', async () => {
+    process.env.NODE_ENV = 'test';
+
+    const res = await makeRequest('/api/provider/listings/listing_123/photos/photo_123', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.photoId, 'photo_123');
+  });
+
   // --- ADMIN KYC REVIEW ENDPOINTS TESTS ---
 
   test('GET /api/admin/kyc without admin claims returns 403 FORBIDDEN', async () => {

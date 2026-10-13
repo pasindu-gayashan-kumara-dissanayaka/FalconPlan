@@ -22,6 +22,7 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
     private OnListingActionListener listener;
 
     public interface OnListingActionListener {
+        void onPhotosClick(ProviderListing listing);
         void onEditClick(ProviderListing listing);
         void onDeleteClick(ProviderListing listing);
     }
@@ -63,6 +64,7 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
         private final TextView txtStatusBadge;
         private final TextView txtTypeLocation;
         private final TextView txtDescription;
+        private final Button btnManagePhotos;
         private final Button btnEditDraft;
         private final Button btnDeleteDraft;
 
@@ -72,6 +74,7 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
             txtStatusBadge = itemView.findViewById(R.id.txtStatusBadge);
             txtTypeLocation = itemView.findViewById(R.id.txtTypeLocation);
             txtDescription = itemView.findViewById(R.id.txtDescription);
+            btnManagePhotos = itemView.findViewById(R.id.btnManagePhotos);
             btnEditDraft = itemView.findViewById(R.id.btnEditDraft);
             btnDeleteDraft = itemView.findViewById(R.id.btnDeleteDraft);
         }
@@ -87,6 +90,10 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
                     ? item.getDescription() : "No description provided.");
 
             txtStatusBadge.setText("Draft");
+
+            btnManagePhotos.setOnClickListener(v -> {
+                if (listener != null) listener.onPhotosClick(item);
+            });
 
             btnEditDraft.setOnClickListener(v -> {
                 if (listener != null) listener.onEditClick(item);

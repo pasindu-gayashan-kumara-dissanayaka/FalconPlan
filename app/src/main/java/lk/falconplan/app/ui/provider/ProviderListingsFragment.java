@@ -102,6 +102,13 @@ public class ProviderListingsFragment extends Fragment implements ProviderListin
     }
 
     @Override
+    public void onPhotosClick(ProviderListing listing) {
+        if (getActivity() instanceof MainActivity && listing != null && listing.getId() != null) {
+            ((MainActivity) getActivity()).loadMainContentFragment(ListingPhotoGalleryFragment.newInstance(listing.getId()), true);
+        }
+    }
+
+    @Override
     public void onEditClick(ProviderListing listing) {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).loadMainContentFragment(AddListingFragment.newInstance(listing.getId()), true);

@@ -75,6 +75,34 @@ describe("FalconPlan Firestore Security Rules", () => {
     }));
   });
 
+  test("Provider owner CANNOT modify immutable createdAt or providerUid on draft update", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("providerProfiles/user_alice/listings/listing_123").set({
+        id: "listing_123",
+        providerUid: "user_alice",
+        listingType: "homestay",
+        title: "Eco Mountain View Room",
+        description: "Cozy village stay",
+        district: "Matale",
+        village: "Meemure",
+        status: "draft",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+        maxGuests: 4,
+        bedrooms: 2,
+        amenities: "WiFi, Meals",
+        durationMinutes: 0,
+        maxParticipants: 0,
+        experienceCategory: ""
+      });
+    });
+
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("providerProfiles/user_alice/listings/listing_123").update({
+      createdAt: 1800000000000 // Immutable modification attempt DENIED!
+    }));
+  });
+
   test("Provider owner CANNOT create listing with status == published client-side", async () => {
     const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
     await assertFails(aliceDb.doc("providerProfiles/user_alice/listings/listing_123").set({
@@ -95,6 +123,32 @@ describe("FalconPlan Firestore Security Rules", () => {
       maxParticipants: 0,
       experienceCategory: ""
     }));
+  });
+
+  test("Non-owner CANNOT delete draft listing owned by another provider", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("providerProfiles/user_alice/listings/listing_123").set({
+        id: "listing_123",
+        providerUid: "user_alice",
+        listingType: "homestay",
+        title: "Eco Mountain View Room",
+        description: "Cozy village stay",
+        district: "Matale",
+        village: "Meemure",
+        status: "draft",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+        maxGuests: 4,
+        bedrooms: 2,
+        amenities: "WiFi, Meals",
+        durationMinutes: 0,
+        maxParticipants: 0,
+        experienceCategory: ""
+      });
+    });
+
+    const bobDb = testEnv.authenticatedContext("user_bob").firestore();
+    await assertFails(bobDb.doc("providerProfiles/user_alice/listings/listing_123").delete());
   });
 
   test("User CANNOT create draft listing under another provider's profile", async () => {
