@@ -77,6 +77,129 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- PROVIDER LISTING SUBMISSION & ADMIN MODERATION TESTS (PHASE 04-B3-1) ---
+
+  test('POST /api/provider/listings/:listingId/submit with unverified KYC returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/listings/listing_123/submit', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'unverified_provider_123',
+        'x-test-mock-unverified-kyc': 'true'
+      }
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('POST /api/provider/listings/:listingId/submit with missing photos returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/listings/listing_123/submit', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'verified_provider_123',
+        'x-test-mock-missing-photos': 'true'
+      }
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('POST /api/provider/listings/:listingId/submit for verified provider transitions status to submitted_under_review', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/listings/listing_123/submit', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'verified_provider_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'submitted_under_review');
+  });
+
+  test('GET /api/admin/listings without admin claims returns 403 FORBIDDEN', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/admin/listings', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'ordinary_user_123'
+      }
+    });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.json.code, 'FORBIDDEN');
+  });
+
+  test('GET /api/admin/listings with admin claims returns 200 OK', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/admin/listings', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('POST /api/admin/listings/:listingId/decision approve decision updates status to published', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ providerUid: 'verified_provider_123', decision: 'approve' });
+
+    const res = await makeRequest('/api/admin/listings/listing_123/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'published');
+  });
+
+  test('POST /api/admin/listings/:listingId/decision reject decision without reason returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ providerUid: 'verified_provider_123', decision: 'reject' });
+
+    const res = await makeRequest('/api/admin/listings/listing_123/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('GET /api/public-listings returns paginated list of approved published listings', async () => {
+    const res = await makeRequest('/api/public-listings?page=1&limit=10');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.page, 1);
+    assert.equal(res.json.limit, 10);
+    assert.ok(Array.isArray(res.json.data));
+  });
+
   // --- PROVIDER LISTING PHOTO ENDPOINTS TESTS ---
 
   test('GET /api/provider/listings/:listingId/photos returns photos list', async () => {
@@ -91,6 +214,22 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.status, 200);
     assert.equal(res.json.status, 'success');
     assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/provider/listings/:listingId/photos/:photoId/preview returns short-lived authorized preview token', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/listings/listing_123/photos/photo_123/preview', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.photoId, 'photo_123');
+    assert.ok(res.json.data.authorizedPreviewUrl);
+    assert.ok(res.json.data.expiresAt > Date.now());
   });
 
   test('POST /api/provider/listings/:listingId/photos uploads listing photo and returns metadata', async () => {
