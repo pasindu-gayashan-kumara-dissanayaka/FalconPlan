@@ -17,11 +17,14 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
+import org.json.JSONObject;
+
 import java.util.List;
 
 import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
 import lk.falconplan.app.data.model.ProviderListing;
+import lk.falconplan.app.data.remote.BackendApiClient;
 import lk.falconplan.app.data.repository.ProviderListingRepository;
 import lk.falconplan.app.data.repository.ProviderListingRepositoryImpl;
 
@@ -106,6 +109,38 @@ public class ProviderListingsFragment extends Fragment implements ProviderListin
         if (getActivity() instanceof MainActivity && listing != null && listing.getId() != null) {
             ((MainActivity) getActivity()).loadMainContentFragment(ListingPhotoGalleryFragment.newInstance(listing.getId()), true);
         }
+    }
+
+    @Override
+    public void onSubmitClick(ProviderListing listing) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || listing == null || listing.getId() == null) return;
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Submit for Admin Review")
+                .setMessage("Submit this listing draft for admin moderation review?")
+                .setPositiveButton("Submit", (dialog, which) -> {
+                    progressBar.setVisibility(View.VISIBLE);
+                    user.getIdToken(true).addOnCompleteListener(task -> {
+                        String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+                        BackendApiClient.getInstance().submitListing(idToken, listing.getId(), new BackendApiClient.ApiCallback<JSONObject>() {
+                            @Override
+                            public void onSuccess(JSONObject result) {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(requireContext(), "Listing submitted for review!", Toast.LENGTH_SHORT).show();
+                                loadListings();
+                            }
+
+                            @Override
+                            public void onError(Exception exception) {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(requireContext(), "Submission failed: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    });
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                .show();
     }
 
     @Override

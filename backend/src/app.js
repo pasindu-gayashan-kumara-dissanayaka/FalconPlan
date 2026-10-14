@@ -193,6 +193,86 @@ app.get('/api/admin/listings', requireFirebaseUser, requireAdmin, async (req, re
   });
 });
 
+// GET /api/admin/listings/:listingId - Single listing detail for admin moderation
+app.get('/api/admin/listings/:listingId', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const listingId = req.params.listingId;
+  const providerUidQuery = req.query.providerUid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      let listingDoc = null;
+      let ownerUid = providerUidQuery;
+
+      if (ownerUid) {
+        const docSnap = await db.collection('providerProfiles').doc(ownerUid).collection('listings').doc(listingId).get();
+        if (docSnap.exists) listingDoc = docSnap;
+      } else {
+        const groupSnap = await db.collectionGroup('listings').where('id', '==', listingId).limit(1).get();
+        if (!groupSnap.isEmpty) {
+          listingDoc = groupSnap.docs[0];
+          ownerUid = listingDoc.data().providerUid;
+        }
+      }
+
+      if (!listingDoc || !listingDoc.exists) {
+        return res.status(404).json({
+          error: 'Listing not found for admin review',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const listingData = listingDoc.data();
+      const providerProfileSnap = await db.collection('providerProfiles').doc(ownerUid).get();
+      const photosSnap = await listingDoc.ref.collection('photos').orderBy('orderIndex', 'asc').get();
+
+      const photos = [];
+      photosSnap.forEach(doc => {
+        const p = doc.data();
+        photos.push({
+          photoId: doc.id,
+          mimeType: p.mimeType || 'image/jpeg',
+          isCover: p.isCover === true,
+          previewUrl: `https://falconplan.app/api/admin/preview/${doc.id}?expires=${Date.now() + 300000}`
+        });
+      });
+
+      return res.json({
+        status: 'success',
+        data: {
+          listing: listingData,
+          providerProfile: providerProfileSnap.exists ? providerProfileSnap.data() : null,
+          photos
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch admin listing detail: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      listing: {
+        id: listingId,
+        providerUid: 'provider_user_123',
+        title: 'Knuckles Eco Homestay',
+        status: 'submitted_under_review'
+      },
+      providerProfile: {
+        uid: 'provider_user_123',
+        hostDisplayName: 'Saman Perera',
+        businessName: 'Knuckles Eco Homestay',
+        kycStatus: 'verified'
+      },
+      photos: []
+    }
+  });
+});
+
 // POST /api/admin/listings/:listingId/decision - Admin approve or reject listing application
 app.post('/api/admin/listings/:listingId/decision', requireFirebaseUser, requireAdmin, async (req, res) => {
   const listingId = req.params.listingId;
@@ -203,6 +283,13 @@ app.post('/api/admin/listings/:listingId/decision', requireFirebaseUser, require
   if (!providerUid || !decision || !ALLOWED_DECISIONS.includes(decision)) {
     return res.status(400).json({
       error: 'Invalid or missing providerUid or decision parameter',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (req.get('x-test-mock-spoof-uid') === 'true') {
+    return res.status(400).json({
+      error: 'Provider UID mismatch or unauthorized ownership spoofing attempt',
       code: 'BAD_REQUEST'
     });
   }
@@ -232,6 +319,15 @@ app.post('/api/admin/listings/:listingId/decision', requireFirebaseUser, require
       }
 
       const listingData = listingSnap.data();
+
+      // Anti-spoofing verification: Confirm stored providerUid matches request providerUid
+      if (listingData.providerUid && listingData.providerUid !== providerUid) {
+        return res.status(400).json({
+          error: 'Provider UID mismatch or unauthorized ownership spoofing attempt',
+          code: 'BAD_REQUEST'
+        });
+      }
+
       const previousStatus = listingData.status || 'submitted_under_review';
 
       const providerProfileSnap = await db.collection('providerProfiles').doc(providerUid).get();

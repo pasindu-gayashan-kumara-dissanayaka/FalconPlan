@@ -25,6 +25,7 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
         void onPhotosClick(ProviderListing listing);
         void onEditClick(ProviderListing listing);
         void onDeleteClick(ProviderListing listing);
+        void onSubmitClick(ProviderListing listing);
     }
 
     public void setOnListingActionListener(OnListingActionListener listener) {
@@ -67,6 +68,7 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
         private final Button btnManagePhotos;
         private final Button btnEditDraft;
         private final Button btnDeleteDraft;
+        private final Button btnSubmitForReview;
 
         public ListingViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -77,6 +79,7 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
             btnManagePhotos = itemView.findViewById(R.id.btnManagePhotos);
             btnEditDraft = itemView.findViewById(R.id.btnEditDraft);
             btnDeleteDraft = itemView.findViewById(R.id.btnDeleteDraft);
+            btnSubmitForReview = itemView.findViewById(R.id.btnSubmitForReview);
         }
 
         public void bind(ProviderListing item, OnListingActionListener listener) {
@@ -89,7 +92,17 @@ public class ProviderListingAdapter extends RecyclerView.Adapter<ProviderListing
             txtDescription.setText(item.getDescription() != null && !item.getDescription().isEmpty()
                     ? item.getDescription() : "No description provided.");
 
-            txtStatusBadge.setText("Draft");
+            String status = item.getStatus() != null ? item.getStatus() : ProviderListing.STATUS_DRAFT;
+            txtStatusBadge.setText(status.toUpperCase(Locale.US));
+
+            if (ProviderListing.STATUS_DRAFT.equals(status)) {
+                btnSubmitForReview.setVisibility(View.VISIBLE);
+                btnSubmitForReview.setOnClickListener(v -> {
+                    if (listener != null) listener.onSubmitClick(item);
+                });
+            } else {
+                btnSubmitForReview.setVisibility(View.GONE);
+            }
 
             btnManagePhotos.setOnClickListener(v -> {
                 if (listener != null) listener.onPhotosClick(item);

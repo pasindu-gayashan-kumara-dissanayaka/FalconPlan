@@ -19,10 +19,15 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "BACKEND_BASE_URL", "\"http://10.0.2.2:3000/api/\"")
+        }
         release {
+            buildConfigField("String", "BACKEND_BASE_URL", "\"https://falconplan.app/api/\"")
             optimization {
                 enable = false
             }

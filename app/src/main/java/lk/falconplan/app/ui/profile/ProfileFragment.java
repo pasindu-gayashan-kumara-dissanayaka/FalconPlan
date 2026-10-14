@@ -44,6 +44,8 @@ public class ProfileFragment extends Fragment {
     private TextView txtVerificationBadge;
     private MaterialButtonToggleGroup toggleGroupMode;
 
+    private boolean isUpdatingProgrammatically = false;
+
     public static ProfileFragment newInstance() {
         return new ProfileFragment();
     }
@@ -82,6 +84,24 @@ public class ProfileFragment extends Fragment {
             }
         });
 
+        View btnAdminKyc = view.findViewById(R.id.btnAdminKycDashboard);
+        if (btnAdminKyc != null) {
+            btnAdminKyc.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(lk.falconplan.app.ui.admin.AdminKycDashboardFragment.newInstance(), true);
+                }
+            });
+        }
+
+        View btnAdminListings = view.findViewById(R.id.btnAdminListingReview);
+        if (btnAdminListings != null) {
+            btnAdminListings.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(lk.falconplan.app.ui.admin.AdminListingReviewFragment.newInstance(), true);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnSignOut).setOnClickListener(v -> {
             authViewModel.signOut();
             if (getActivity() instanceof MainActivity) {
@@ -92,7 +112,8 @@ public class ProfileFragment extends Fragment {
         cardProviderNotice.setOnClickListener(v -> openProviderWorkspace());
 
         toggleGroupMode.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (!isChecked) return;
+            if (isUpdatingProgrammatically || !isChecked) return;
+
             if (checkedId == R.id.btnModeProvider) {
                 authViewModel.updateActiveMode(UserProfile.MODE_PROVIDER);
                 cardProviderNotice.setVisibility(View.VISIBLE);
@@ -100,6 +121,7 @@ public class ProfileFragment extends Fragment {
             } else {
                 authViewModel.updateActiveMode(UserProfile.MODE_TRAVELER);
                 cardProviderNotice.setVisibility(View.GONE);
+                Toast.makeText(requireContext(), "Switched to Traveler Mode.", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -164,6 +186,8 @@ public class ProfileFragment extends Fragment {
             if (resource != null && resource.getStatus() == Resource.Status.SUCCESS && resource.getData() != null) {
                 UserProfile profile = resource.getData();
                 txtUserName.setText(profile.getDisplayName() != null ? profile.getDisplayName() : "FalconPlan Member");
+
+                isUpdatingProgrammatically = true;
                 if (UserProfile.MODE_PROVIDER.equals(profile.getActiveMode())) {
                     toggleGroupMode.check(R.id.btnModeProvider);
                     cardProviderNotice.setVisibility(View.VISIBLE);
@@ -171,6 +195,7 @@ public class ProfileFragment extends Fragment {
                     toggleGroupMode.check(R.id.btnModeTraveler);
                     cardProviderNotice.setVisibility(View.GONE);
                 }
+                isUpdatingProgrammatically = false;
             }
         });
     }

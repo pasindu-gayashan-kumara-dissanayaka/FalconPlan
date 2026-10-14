@@ -17,13 +17,17 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import lk.falconplan.app.BuildConfig;
 import lk.falconplan.app.data.model.PublicTravelPlan;
 import lk.falconplan.app.data.model.TravelPlan;
 import lk.falconplan.app.data.model.TravelPlanStop;
 
 public class BackendApiClient {
 
+    private static final String DEFAULT_BASE_URL = BuildConfig.BACKEND_BASE_URL;
+
     private static final String[] BASE_URLS = {
+            DEFAULT_BASE_URL,
             "http://10.0.2.2:3000/api/",
             "http://localhost:3000/api/",
             "http://127.0.0.1:3000/api/"
@@ -50,25 +54,63 @@ public class BackendApiClient {
         return instance;
     }
 
-    // --- ADMIN KYC REVIEW ENDPOINTS (PHASE 04-A3-2) ---
+    // --- PROVIDER LISTING SUBMISSION & ADMIN MODERATION ENDPOINTS (PHASE 04-B3-1) ---
 
-    public void getAdminKycApplications(String idToken, String statusFilter, int page, int limit, ApiCallback<JSONArray> callback) {
+    // POST /api/provider/listings/:listingId/submit - Submit private draft listing for admin review
+    public void submitListing(String idToken, String listingId, ApiCallback<JSONObject> callback) {
         executor.execute(() -> {
             Exception lastException = null;
             for (String baseUrl : BASE_URLS) {
                 try {
-                    String query = "admin/kyc?page=" + page + "&limit=" + limit;
-                    if (statusFilter != null && !statusFilter.isEmpty()) {
-                        query += "&status=" + statusFilter;
+                    URL url = new URL(baseUrl + "provider/listings/" + listingId + "/submit");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    URL url = new URL(baseUrl + query);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    // GET /api/admin/listings - Paginated list of submitted provider listings for admin moderation
+    public void getAdminListings(String idToken, int page, int limit, ApiCallback<JSONArray> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "admin/listings?page=" + page + "&limit=" + limit);
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -91,7 +133,153 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    // GET /api/admin/listings/:listingId - Single listing detail for admin moderation
+    public void getAdminListingDetail(String idToken, String listingId, String providerUid, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    String query = "admin/listings/" + listingId;
+                    if (providerUid != null && !providerUid.isEmpty()) {
+                        query += "?providerUid=" + providerUid;
+                    }
+                    URL url = new URL(baseUrl + query);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    // POST /api/admin/listings/:listingId/decision - Admin approve or reject listing application
+    public void submitAdminListingDecision(String idToken, String listingId, String providerUid, String decision, String reason, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "admin/listings/" + listingId + "/decision");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+                    conn.setDoOutput(true);
+
+                    JSONObject jsonBody = new JSONObject();
+                    jsonBody.put("providerUid", providerUid);
+                    jsonBody.put("decision", decision);
+                    if (reason != null && !reason.isEmpty()) {
+                        jsonBody.put("reason", reason);
+                    }
+
+                    try (OutputStream os = conn.getOutputStream()) {
+                        byte[] input = jsonBody.toString().getBytes(StandardCharsets.UTF_8);
+                        os.write(input, 0, input.length);
+                    }
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    // --- ADMIN KYC REVIEW ENDPOINTS (PHASE 04-A3-2) ---
+
+    public void getAdminKycApplications(String idToken, String statusFilter, int page, int limit, ApiCallback<JSONArray> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    String query = "admin/kyc?page=" + page + "&limit=" + limit;
+                    if (statusFilter != null && !statusFilter.isEmpty()) {
+                        query += "&status=" + statusFilter;
+                    }
+                    URL url = new URL(baseUrl + query);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONArray dataArray = resJson.optJSONArray("data");
+                        mainHandler.post(() -> callback.onSuccess(dataArray != null ? dataArray : new JSONArray()));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -107,8 +295,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -131,7 +319,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -147,8 +335,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -171,7 +359,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -188,8 +376,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
                     conn.setDoOutput(true);
 
                     JSONObject jsonBody = new JSONObject();
@@ -224,7 +412,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -242,8 +430,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -266,7 +454,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -318,7 +506,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -334,8 +522,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -349,7 +537,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -365,8 +553,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -389,7 +577,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -408,8 +596,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
                     conn.setDoOutput(true);
 
                     JSONObject jsonBody = new JSONObject();
@@ -461,7 +649,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -478,8 +666,8 @@ public class BackendApiClient {
                     if (idToken != null && !idToken.isEmpty()) {
                         conn.setRequestProperty("Authorization", "Bearer " + idToken);
                     }
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -493,7 +681,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
@@ -506,8 +694,8 @@ public class BackendApiClient {
                     URL url = new URL(baseUrl + "public-plans?page=" + page + "&limit=" + limit);
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(3000);
-                    conn.setReadTimeout(3000);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
 
                     int statusCode = conn.getResponseCode();
                     if (statusCode == 200) {
@@ -537,7 +725,7 @@ public class BackendApiClient {
                 }
             }
 
-            Exception finalErr = lastException != null ? lastException : new Exception("Backend connection failed.");
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + DEFAULT_BASE_URL + "). Please ensure Express server is running on port 3000.");
             mainHandler.post(() -> callback.onError(finalErr));
         });
     }
