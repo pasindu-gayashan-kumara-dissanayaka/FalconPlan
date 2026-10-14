@@ -16,5 +16,8 @@
     "express": "^4.21.2",
     "firebase-admin": "^13.4.0",
     "helmet": "^8.1.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0"
   }
 }

@@ -50,6 +50,48 @@ public class BackendApiClient {
         return instance;
     }
 
+    // --- PROVIDER LISTING SUBMISSION ENDPOINT ---
+
+    public void submitListing(String idToken, String listingId, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "provider/listings/" + listingId + "/submit");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + BASE_URLS[0] + "). Please ensure Express server is running on port 3000.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
     // --- ADMIN KYC REVIEW ENDPOINTS (PHASE 04-A3-2) ---
 
     public void getAdminKycApplications(String idToken, String statusFilter, int page, int limit, ApiCallback<JSONArray> callback) {
