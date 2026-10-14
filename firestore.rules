@@ -149,6 +149,47 @@ service cloud.firestore {
         && request.resource.data.contactPhone is string;
 
       allow delete: if false;
+
+      // Provider Listings Subcollection: providerProfiles/{userId}/listings/{listingId}
+      match /listings/{listingId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['id', 'providerUid', 'listingType', 'title', 'description', 'district', 'village', 'status', 'createdAt', 'updatedAt', 'maxGuests', 'bedrooms', 'amenities', 'durationMinutes', 'maxParticipants', 'experienceCategory'])
+          && request.resource.data.id == listingId
+          && request.resource.data.providerUid == userId
+          && (request.resource.data.listingType == 'homestay' || request.resource.data.listingType == 'experience')
+          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+          && request.resource.data.description is string && request.resource.data.description.size() <= 500
+          && request.resource.data.district is string && request.resource.data.district.size() > 0
+          && request.resource.data.village is string && request.resource.data.village.size() > 0
+          && request.resource.data.status == 'draft'
+          && request.resource.data.maxGuests is number && request.resource.data.maxGuests >= 0
+          && request.resource.data.bedrooms is number && request.resource.data.bedrooms >= 0
+          && request.resource.data.durationMinutes is number && request.resource.data.durationMinutes >= 0
+          && request.resource.data.maxParticipants is number && request.resource.data.maxParticipants >= 0;
+
+        allow update: if isOwner(userId)
+          && resource.data.status == 'draft'
+          && request.resource.data.status == 'draft'
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'providerUid', 'createdAt', 'status'])
+          && request.resource.data.keys().hasOnly(['id', 'providerUid', 'listingType', 'title', 'description', 'district', 'village', 'status', 'createdAt', 'updatedAt', 'maxGuests', 'bedrooms', 'amenities', 'durationMinutes', 'maxParticipants', 'experienceCategory'])
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.providerUid == resource.data.providerUid
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (request.resource.data.listingType == 'homestay' || request.resource.data.listingType == 'experience')
+          && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+          && request.resource.data.description is string && request.resource.data.description.size() <= 500
+          && request.resource.data.district is string && request.resource.data.district.size() > 0
+          && request.resource.data.village is string && request.resource.data.village.size() > 0
+          && request.resource.data.maxGuests is number && request.resource.data.maxGuests >= 0
+          && request.resource.data.bedrooms is number && request.resource.data.bedrooms >= 0
+          && request.resource.data.durationMinutes is number && request.resource.data.durationMinutes >= 0
+          && request.resource.data.maxParticipants is number && request.resource.data.maxParticipants >= 0;
+
+        allow delete: if isOwner(userId)
+          && resource.data.status == 'draft';
+      }
     }
 
     // KYC Document Records: kyc/{userId}

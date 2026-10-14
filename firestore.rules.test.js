@@ -1,5 +1,5 @@
 /**
- * Security Rules Contract Tests for FalconPlan (Profile + SavedPlaces + TravelPlans + ProviderProfiles + KYC)
+ * Security Rules Contract Tests for FalconPlan (Profile + SavedPlaces + TravelPlans + ProviderProfiles + Listings + KYC)
  * Tested with @firebase/rules-unit-testing
  */
 
@@ -50,6 +50,126 @@ describe("FalconPlan Firestore Security Rules", () => {
       kycStatus: "pending_identity_verification",
       createdAt: 1700000000000,
       updatedAt: 1700000000000
+    }));
+  });
+
+  test("Provider owner can create private draft listing", async () => {
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertSucceeds(aliceDb.doc("providerProfiles/user_alice/listings/listing_123").set({
+      id: "listing_123",
+      providerUid: "user_alice",
+      listingType: "homestay",
+      title: "Eco Mountain View Room",
+      description: "Cozy village stay",
+      district: "Matale",
+      village: "Meemure",
+      status: "draft",
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+      maxGuests: 4,
+      bedrooms: 2,
+      amenities: "WiFi, Meals",
+      durationMinutes: 0,
+      maxParticipants: 0,
+      experienceCategory: ""
+    }));
+  });
+
+  test("Provider owner CANNOT modify immutable createdAt or providerUid on draft update", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("providerProfiles/user_alice/listings/listing_123").set({
+        id: "listing_123",
+        providerUid: "user_alice",
+        listingType: "homestay",
+        title: "Eco Mountain View Room",
+        description: "Cozy village stay",
+        district: "Matale",
+        village: "Meemure",
+        status: "draft",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+        maxGuests: 4,
+        bedrooms: 2,
+        amenities: "WiFi, Meals",
+        durationMinutes: 0,
+        maxParticipants: 0,
+        experienceCategory: ""
+      });
+    });
+
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("providerProfiles/user_alice/listings/listing_123").update({
+      createdAt: 1800000000000 // Immutable modification attempt DENIED!
+    }));
+  });
+
+  test("Provider owner CANNOT create listing with status == published client-side", async () => {
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("providerProfiles/user_alice/listings/listing_123").set({
+      id: "listing_123",
+      providerUid: "user_alice",
+      listingType: "homestay",
+      title: "Eco Mountain View Room",
+      description: "Cozy village stay",
+      district: "Matale",
+      village: "Meemure",
+      status: "published", // Privilege escalation attempt DENIED!
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+      maxGuests: 4,
+      bedrooms: 2,
+      amenities: "WiFi, Meals",
+      durationMinutes: 0,
+      maxParticipants: 0,
+      experienceCategory: ""
+    }));
+  });
+
+  test("Non-owner CANNOT delete draft listing owned by another provider", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("providerProfiles/user_alice/listings/listing_123").set({
+        id: "listing_123",
+        providerUid: "user_alice",
+        listingType: "homestay",
+        title: "Eco Mountain View Room",
+        description: "Cozy village stay",
+        district: "Matale",
+        village: "Meemure",
+        status: "draft",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+        maxGuests: 4,
+        bedrooms: 2,
+        amenities: "WiFi, Meals",
+        durationMinutes: 0,
+        maxParticipants: 0,
+        experienceCategory: ""
+      });
+    });
+
+    const bobDb = testEnv.authenticatedContext("user_bob").firestore();
+    await assertFails(bobDb.doc("providerProfiles/user_alice/listings/listing_123").delete());
+  });
+
+  test("User CANNOT create draft listing under another provider's profile", async () => {
+    const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+    await assertFails(aliceDb.doc("providerProfiles/user_bob/listings/listing_123").set({
+      id: "listing_123",
+      providerUid: "user_bob",
+      listingType: "homestay",
+      title: "Eco Room",
+      description: "Desc",
+      district: "Matale",
+      village: "Meemure",
+      status: "draft",
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+      maxGuests: 2,
+      bedrooms: 1,
+      amenities: "",
+      durationMinutes: 0,
+      maxParticipants: 0,
+      experienceCategory: ""
     }));
   });
 
