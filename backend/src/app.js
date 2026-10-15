@@ -47,6 +47,230 @@ function getOccupiedDates(checkInDateStr, checkOutDateStr) {
   return dates;
 }
 
+// --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
+
+// POST /api/payments/initiate - Initiate secure payment record for confirmed booking
+app.post('/api/payments/initiate', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { bookingId, method } = req.body || {};
+
+  const ALLOWED_METHODS = ['bank_transfer', 'cash_on_arrival'];
+  if (!bookingId || !method || !ALLOWED_METHODS.includes(method)) {
+    return res.status(400).json({
+      error: 'Invalid or missing bookingId or payment method. Allowed: bank_transfer, cash_on_arrival',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const initialStatus = method === 'bank_transfer' ? 'awaiting_proof' : 'due_on_arrival';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const bookingRef = db.collection('bookings').doc(bookingId);
+      const bookingSnap = await bookingRef.get();
+
+      if (!bookingSnap.exists) {
+        return res.status(404).json({
+          error: 'Booking not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const booking = bookingSnap.data();
+
+      if (booking.travelerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this booking request',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      if (booking.status !== 'confirmed') {
+        return res.status(400).json({
+          error: 'Payment can only be initiated for confirmed bookings',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const paymentRef = db.collection('payments').doc(bookingId);
+      const paymentSnap = await paymentRef.get();
+
+      if (paymentSnap.exists) {
+        return res.json({
+          status: 'success',
+          message: 'Existing payment record retrieved',
+          data: paymentSnap.data()
+        });
+      }
+
+      const paymentRecord = {
+        paymentId: bookingId,
+        bookingId,
+        travelerUid: callerUid,
+        providerUid: booking.providerUid,
+        listingId: booking.listingId,
+        amountDueLkr: booking.quotedTotalLkr,
+        currency: 'LKR',
+        method,
+        status: initialStatus,
+        createdAt: now,
+        updatedAt: now,
+        verifiedAt: null,
+        verifiedBy: null
+      };
+
+      const batch = db.batch();
+      batch.set(paymentRef, paymentRecord);
+
+      const auditRef = db.collection('paymentAuditLogs').doc();
+      batch.set(auditRef, {
+        logId: auditRef.id,
+        paymentId: bookingId,
+        bookingId,
+        actorUid: callerUid,
+        action: 'initiate_payment',
+        method,
+        status: initialStatus,
+        amountDueLkr: booking.quotedTotalLkr,
+        timestamp: now
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'Payment initiated successfully',
+        data: paymentRecord
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to initiate payment: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-unconfirmed') === 'true') {
+    return res.status(400).json({
+      error: 'Payment can only be initiated for confirmed bookings',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Payment initiated successfully',
+    data: {
+      paymentId: bookingId,
+      bookingId,
+      travelerUid: callerUid,
+      providerUid: 'provider_user_123',
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method,
+      status: initialStatus,
+      createdAt: now,
+      updatedAt: now
+    }
+  });
+});
+
+// GET /api/payments/mine - List traveler's payments
+app.get('/api/payments/mine', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const snapshot = await db.collection('payments')
+        .where('travelerUid', '==', callerUid)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const list = [];
+      snapshot.forEach(doc => list.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch payments: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    total: 1,
+    data: [{
+      paymentId: 'booking_1001',
+      bookingId: 'booking_1001',
+      travelerUid: callerUid,
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method: 'bank_transfer',
+      status: 'awaiting_proof'
+    }]
+  });
+});
+
+// GET /api/payments/:paymentId - Get payment details
+app.get('/api/payments/:paymentId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const paymentId = req.params.paymentId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const doc = await db.collection('payments').doc(paymentId).get();
+
+      if (!doc.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const payment = doc.data();
+      if (payment.travelerUid !== callerUid && payment.providerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not have permission to view this payment',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: payment
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch payment detail: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      paymentId,
+      bookingId: paymentId,
+      travelerUid: callerUid,
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method: 'bank_transfer',
+      status: 'awaiting_proof'
+    }
+  });
+});
+
 // --- PUBLIC ROOM LISTINGS & BOOKING QUOTE ENDPOINTS (PHASE 05-A1) ---
 
 // GET /api/public-listings/:listingId/rooms - Public approved room options for published homestays
@@ -902,7 +1126,7 @@ app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', re
         data: dayData
       });
     } catch (err) {
-      if (err.message.startsWith('CAPACITY_EXCEEDED')) {
+      if (err.message && err.message.startsWith('CAPACITY_EXCEEDED')) {
         const parts = err.message.split(':');
         return res.status(400).json({
           error: `blockedUnits (${parts[1]}) + confirmed booked units (${parts[2]}) cannot exceed total room units (${parts[3]})`,
