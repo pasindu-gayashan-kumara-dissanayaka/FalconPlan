@@ -185,6 +185,126 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.status, 'cancelled');
   });
 
+  // --- SECURE PAYMENT BACKEND TESTS (PHASE 05-B1) ---
+
+  test('POST /api/payments/initiate with bank_transfer returns awaiting_proof status', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      bookingId: 'booking_1001',
+      method: 'bank_transfer'
+    });
+
+    const res = await makeRequest('/api/payments/initiate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.method, 'bank_transfer');
+    assert.equal(res.json.data.status, 'awaiting_proof');
+    assert.equal(res.json.data.amountDueLkr, 19000);
+  });
+
+  test('POST /api/payments/initiate with cash_on_arrival returns due_on_arrival status', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      bookingId: 'booking_1001',
+      method: 'cash_on_arrival'
+    });
+
+    const res = await makeRequest('/api/payments/initiate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.method, 'cash_on_arrival');
+    assert.equal(res.json.data.status, 'due_on_arrival');
+  });
+
+  test('POST /api/payments/initiate for unconfirmed booking returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      bookingId: 'booking_unconfirmed_999',
+      method: 'bank_transfer'
+    });
+
+    const res = await makeRequest('/api/payments/initiate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123',
+        'x-test-mock-unconfirmed': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('POST /api/payments/initiate with invalid payment method returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      bookingId: 'booking_1001',
+      method: 'unsupported_credit_card'
+    });
+
+    const res = await makeRequest('/api/payments/initiate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('GET /api/payments/mine returns traveler payment records list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/payments/mine', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/payments/:paymentId returns payment details for authorized user', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/payments/booking_1001', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.paymentId, 'booking_1001');
+  });
+
   // --- ROOM AVAILABILITY CALENDAR TESTS (PHASE 04-C3-1) ---
 
   test('GET /api/provider/listings/:listingId/rooms/:roomId/availability returns blocked days list', async () => {
