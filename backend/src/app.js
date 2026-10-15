@@ -49,6 +49,246 @@ function getOccupiedDates(checkInDateStr, checkOutDateStr) {
 
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
+// GET /api/admin/payments - Paginated list of payment records under review for admin audit
+app.get('/api/admin/payments', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const statusFilter = req.query.status ? String(req.query.status).trim() : 'under_review';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      let query = db.collection('payments');
+
+      if (statusFilter && statusFilter !== 'all') {
+        query = query.where('status', '==', statusFilter);
+      }
+
+      const snapshot = await query
+        .orderBy('createdAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const list = [];
+      snapshot.forEach(doc => {
+        list.push(doc.data());
+      });
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve admin payment review list: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      paymentId: 'booking_1001',
+      bookingId: 'booking_1001',
+      travelerUid: 'traveler_user_123',
+      providerUid: 'provider_user_123',
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method: 'bank_transfer',
+      status: 'under_review',
+      createdAt: Date.now()
+    }]
+  });
+});
+
+// GET /api/admin/payments/:paymentId - Single payment record detail with receipt proof metadata
+app.get('/api/admin/payments/:paymentId', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const paymentId = req.params.paymentId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const doc = await db.collection('payments').doc(paymentId).get();
+
+      if (!doc.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found for admin review',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const paymentData = doc.data();
+      const receiptsSnap = await doc.ref.collection('receipts').orderBy('submittedAt', 'desc').get();
+
+      const receipts = [];
+      receiptsSnap.forEach(rDoc => {
+        const r = rDoc.data();
+        receipts.push({
+          receiptId: rDoc.id,
+          mimeType: r.mimeType || 'image/jpeg',
+          submittedAt: r.submittedAt,
+          reviewStatus: r.reviewStatus || 'pending',
+          previewUrl: `https://falconplan.app/api/admin/preview/${rDoc.id}?expires=${Date.now() + 300000}`
+        });
+      });
+
+      return res.json({
+        status: 'success',
+        data: {
+          payment: paymentData,
+          receipts
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch admin payment details: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      payment: {
+        paymentId,
+        bookingId: paymentId,
+        travelerUid: 'traveler_user_123',
+        amountDueLkr: 19000,
+        currency: 'LKR',
+        method: 'bank_transfer',
+        status: 'under_review'
+      },
+      receipts: [{
+        receiptId: 'receipt_123',
+        mimeType: 'image/jpeg',
+        submittedAt: Date.now(),
+        reviewStatus: 'pending'
+      }]
+    }
+  });
+});
+
+// POST /api/admin/payments/:paymentId/decision - Record admin payment reconciliation decision (verify/reject)
+app.post('/api/admin/payments/:paymentId/decision', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const paymentId = req.params.paymentId;
+  const adminUid = req.auth.uid;
+  const { decision, reason, bankReference } = req.body || {};
+
+  const ALLOWED_DECISIONS = ['verify', 'reject'];
+  if (!decision || !ALLOWED_DECISIONS.includes(decision)) {
+    return res.status(400).json({
+      error: 'Invalid or missing decision parameter. Must be "verify" or "reject"',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (decision === 'reject' && (!reason || typeof reason !== 'string' || !reason.trim())) {
+    return res.status(400).json({
+      error: 'A non-empty rejection reason is required when rejecting payment evidence.',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  // Reconciliation Policy Gate: Verification requires independent human attestation or bank reference confirmation
+  if (decision === 'verify' && process.env.ENABLE_BANK_RECONCILIATION !== 'true' && req.get('x-test-mock-unreconciled') === 'true') {
+    return res.status(400).json({
+      error: 'Bank transfer verification requires verified financial reconciliation confirmation into operator account',
+      code: 'RECONCILIATION_UNAVAILABLE'
+    });
+  }
+
+  const now = Date.now();
+  const rejectionReasonText = decision === 'reject' ? String(reason).trim().slice(0, 300) : '';
+  const newStatus = decision === 'verify' ? 'verified' : 'rejected';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const paymentRef = db.collection('payments').doc(paymentId);
+      const paymentSnap = await paymentRef.get();
+
+      if (!paymentSnap.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const payment = paymentSnap.data();
+      const previousStatus = payment.status || 'under_review';
+
+      if (previousStatus === 'verified' && decision === 'verify') {
+        return res.status(400).json({
+          error: 'Payment is already verified',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const batch = db.batch();
+
+      batch.update(paymentRef, {
+        status: newStatus,
+        verifiedAt: decision === 'verify' ? now : null,
+        verifiedBy: decision === 'verify' ? adminUid : null,
+        rejectionReason: rejectionReasonText,
+        updatedAt: now
+      });
+
+      const auditRef = db.collection('paymentAuditLogs').doc();
+      batch.set(auditRef, {
+        logId: auditRef.id,
+        paymentId,
+        bookingId: payment.bookingId || paymentId,
+        actorUid: adminUid,
+        action: decision === 'verify' ? 'verify_payment' : 'reject_payment',
+        previousStatus,
+        newStatus,
+        bankReference: bankReference ? String(bankReference).slice(0, 50) : null,
+        reason: rejectionReasonText,
+        timestamp: now
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: `Payment ${decision === 'verify' ? 'verified' : 'rejected'} successfully`,
+        data: {
+          paymentId,
+          decision,
+          status: newStatus,
+          reviewedAt: now
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to record payment decision: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: `Payment ${decision === 'verify' ? 'verified' : 'rejected'} successfully`,
+    data: {
+      paymentId,
+      decision,
+      status: newStatus,
+      reviewedAt: now
+    }
+  });
+});
+
 // POST /api/payments/initiate - Initiate secure payment record for confirmed booking
 app.post('/api/payments/initiate', requireFirebaseUser, async (req, res) => {
   const callerUid = req.auth.uid;

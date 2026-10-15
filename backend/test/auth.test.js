@@ -343,6 +343,111 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.ok(res.json.data.authorizedPreviewUrl);
   });
 
+  // --- SECURE ADMIN PAYMENT REVIEW & RECONCILIATION TESTS (PHASE 05-B3-1) ---
+
+  test('GET /api/admin/payments without admin claims returns 403 FORBIDDEN', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/admin/payments', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'ordinary_user_123'
+      }
+    });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.json.code, 'FORBIDDEN');
+  });
+
+  test('GET /api/admin/payments with admin claims returns 200 OK', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/admin/payments', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/admin/payments/:paymentId with admin claims returns payment detail with receipt metadata', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/admin/payments/booking_1001', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.payment.paymentId, 'booking_1001');
+    assert.ok(Array.isArray(res.json.data.receipts));
+  });
+
+  test('POST /api/admin/payments/:paymentId/decision verify decision updates status to verified', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'verify', bankReference: 'BANK_TX_98765' });
+
+    const res = await makeRequest('/api/admin/payments/booking_1001/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'verified');
+  });
+
+  test('POST /api/admin/payments/:paymentId/decision reject decision without reason returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'reject' });
+
+    const res = await makeRequest('/api/admin/payments/booking_1001/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('POST /api/admin/payments/:paymentId/decision reject decision with valid reason returns 200 OK', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'reject', reason: 'Receipt photo was unreadable or amount mismatched.' });
+
+    const res = await makeRequest('/api/admin/payments/booking_1001/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'rejected');
+  });
+
   // --- ROOM AVAILABILITY CALENDAR TESTS (PHASE 04-C3-1) ---
 
   test('GET /api/provider/listings/:listingId/rooms/:roomId/availability returns blocked days list', async () => {
