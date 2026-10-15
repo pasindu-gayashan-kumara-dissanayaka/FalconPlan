@@ -77,6 +77,144 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- COMMUNITY POSTS BACKEND TESTS (PHASE 06-A1) ---
+
+  test('POST /api/community/posts creates draft community post', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      caption: 'Trekking through Knuckles Cloud Forest!',
+      destinationId: 'dest_knuckles'
+    });
+
+    const res = await makeRequest('/api/community/posts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'draft');
+    assert.equal(res.json.data.caption, 'Trekking through Knuckles Cloud Forest!');
+  });
+
+  test('POST /api/community/posts with empty caption returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ caption: '   ' });
+
+    const res = await makeRequest('/api/community/posts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('GET /api/community/posts/mine returns traveler posts list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/mine', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('POST /api/community/posts/:postId/photos uploads photo for draft post', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      mimeType: 'image/jpeg',
+      fileBase64: '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP123456789012345678901234567890'
+    });
+
+    const res = await makeRequest('/api/community/posts/post_1001/photos', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.mimeType, 'image/jpeg');
+  });
+
+  test('POST /api/community/posts/:postId/publish publishes community post', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/post_1001/publish', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'published');
+  });
+
+  test('GET /api/community/feed returns public community travel stories feed', async () => {
+    const res = await makeRequest('/api/community/feed?page=1&limit=10');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('POST /api/community/posts/:postId/report reports post for moderation', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ reason: 'Inappropriate content or spam' });
+
+    const res = await makeRequest('/api/community/posts/post_1001/report', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('POST /api/admin/community/posts/:postId/moderate hides post with admin claims', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'hide', reason: 'Violates community guidelines' });
+
+    const res = await makeRequest('/api/admin/community/posts/post_1001/moderate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
   // --- BOOKING BACKEND & DOUBLE BOOKING PREVENTION TESTS (PHASE 05-A1) ---
 
   test('GET /api/public-listings/:listingId/rooms returns approved room options', async () => {
