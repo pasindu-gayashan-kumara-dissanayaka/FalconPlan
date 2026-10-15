@@ -177,6 +177,17 @@
                         android:textSize="13sp"
                         app:cornerRadius="12dp" />
                 </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBookingRequests"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="10dp"
+                    android:text="View Booking Requests"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    app:cornerRadius="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

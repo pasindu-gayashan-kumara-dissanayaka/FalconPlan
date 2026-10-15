@@ -34,6 +34,745 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
   });
 });
 
+// Helper function to calculate occupied dates between checkInDate and checkOutDate
+function getOccupiedDates(checkInDateStr, checkOutDateStr) {
+  const dates = [];
+  let curr = new Date(checkInDateStr + 'T00:00:00.000Z');
+  const end = new Date(checkOutDateStr + 'T00:00:00.000Z');
+
+  while (curr < end) {
+    dates.push(curr.toISOString().slice(0, 10));
+    curr.setUTCDate(curr.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+// --- PUBLIC ROOM LISTINGS & BOOKING QUOTE ENDPOINTS (PHASE 05-A1) ---
+
+// GET /api/public-listings/:listingId/rooms - Public approved room options for published homestays
+app.get('/api/public-listings/:listingId/rooms', async (req, res) => {
+  const listingId = req.params.listingId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const publicListingSnap = await db.collection('publicListings').doc(listingId).get();
+
+      if (!publicListingSnap.exists || publicListingSnap.data().status !== 'published') {
+        return res.status(404).json({
+          error: 'Public homestay listing not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const providerUid = publicListingSnap.data().providerUid;
+      const roomsSnap = await db.collection('providerProfiles').doc(providerUid)
+        .collection('listings').doc(listingId)
+        .collection('rooms').get();
+
+      const rooms = [];
+      for (const roomDoc of roomsSnap.docs) {
+        const roomData = roomDoc.data();
+        const pricingSnap = await roomDoc.ref.collection('pricing').doc('current').get();
+
+        if (pricingSnap.exists) {
+          const pricingData = pricingSnap.data();
+          rooms.push({
+            roomId: roomDoc.id,
+            roomName: roomData.roomName,
+            roomType: roomData.roomType,
+            totalUnits: roomData.totalUnits,
+            maxGuestsPerUnit: roomData.maxGuestsPerUnit,
+            bedCount: roomData.bedCount,
+            bedType: roomData.bedType,
+            bathroomType: roomData.bathroomType,
+            amenities: roomData.amenities,
+            pricing: {
+              currency: 'LKR',
+              pricePerNightLkr: pricingData.pricePerNightLkr,
+              includedGuests: pricingData.includedGuests,
+              extraGuestFeeLkr: pricingData.extraGuestFeeLkr,
+              breakfastOffered: pricingData.breakfastOffered,
+              breakfastFeePerGuestLkr: pricingData.breakfastFeePerGuestLkr
+            }
+          });
+        }
+      }
+
+      return res.json({
+        status: 'success',
+        data: {
+          listingId,
+          providerUid,
+          rooms
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch public rooms: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      listingId,
+      providerUid: 'provider_user_123',
+      rooms: [{
+        roomId: 'room_101',
+        roomName: 'Mountain View Double Room',
+        roomType: 'double',
+        totalUnits: 2,
+        maxGuestsPerUnit: 2,
+        pricing: {
+          currency: 'LKR',
+          pricePerNightLkr: 9500,
+          includedGuests: 2,
+          extraGuestFeeLkr: 1500,
+          breakfastOffered: true,
+          breakfastFeePerGuestLkr: 800
+        }
+      }]
+    }
+  });
+});
+
+// POST /api/bookings/quote - Itemized server-side price calculation for booking quote
+app.post('/api/bookings/quote', async (req, res) => {
+  const { listingId, roomId, checkInDate, checkOutDate, guests, roomUnitsRequested, selectedBreakfast } = req.body || {};
+
+  const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+  if (!checkInDate || !DATE_REGEX.test(checkInDate) || !checkOutDate || !DATE_REGEX.test(checkOutDate)) {
+    return res.status(400).json({
+      error: 'Invalid check-in or check-out date format. Must be YYYY-MM-DD',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const checkIn = new Date(checkInDate + 'T00:00:00.000Z');
+  const checkOut = new Date(checkOutDate + 'T00:00:00.000Z');
+
+  if (checkOut <= checkIn) {
+    return res.status(400).json({
+      error: 'checkOutDate must be after checkInDate',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const nights = Math.round((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+  if (nights < 1 || nights > 14) {
+    return res.status(400).json({
+      error: 'Booking duration must be between 1 and 14 nights',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const numGuests = typeof guests === 'number' && Number.isInteger(guests) && guests > 0 ? guests : 1;
+  const numUnits = typeof roomUnitsRequested === 'number' && Number.isInteger(roomUnitsRequested) && roomUnitsRequested > 0 ? roomUnitsRequested : 1;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const groupSnap = await db.collectionGroup('rooms').where('id', '==', roomId).limit(1).get();
+
+      if (groupSnap.isEmpty) {
+        return res.status(404).json({
+          error: 'Room not found for booking quote',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const roomDoc = groupSnap.docs[0];
+      const roomData = roomDoc.data();
+      const pricingSnap = await roomDoc.ref.collection('pricing').doc('current').get();
+
+      if (!pricingSnap.exists) {
+        return res.status(400).json({
+          error: 'Room pricing is not configured for this room',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const pricing = pricingSnap.data();
+      if (numGuests > roomData.maxGuestsPerUnit * numUnits) {
+        return res.status(400).json({
+          error: `Number of guests (${numGuests}) exceeds room capacity (${roomData.maxGuestsPerUnit * numUnits})`,
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const baseNightlyPrice = pricing.pricePerNightLkr;
+      const extraGuestsCount = Math.max(0, numGuests - (pricing.includedGuests * numUnits));
+      const extraGuestFeePerNight = extraGuestsCount * pricing.extraGuestFeeLkr;
+      const breakfastFeePerNight = (selectedBreakfast === true && pricing.breakfastOffered === true) ? (numGuests * pricing.breakfastFeePerGuestLkr) : 0;
+
+      const nightlyTotal = (baseNightlyPrice * numUnits) + extraGuestFeePerNight + breakfastFeePerNight;
+      const quotedTotalLkr = nightlyTotal * nights;
+
+      return res.json({
+        status: 'success',
+        data: {
+          listingId,
+          roomId,
+          checkInDate,
+          checkOutDate,
+          nights,
+          guests: numGuests,
+          roomUnitsRequested: numUnits,
+          currency: 'LKR',
+          pricePerNightLkr: baseNightlyPrice,
+          extraGuestFeeLkr: extraGuestFeePerNight,
+          breakfastFeePerGuestLkr: breakfastFeePerNight,
+          quotedTotalLkr
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to generate booking quote: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // Mock Mode Quote
+  const basePrice = 9500;
+  const quotedTotalLkr = basePrice * numUnits * nights;
+
+  return res.json({
+    status: 'success',
+    data: {
+      listingId,
+      roomId,
+      checkInDate,
+      checkOutDate,
+      nights,
+      guests: numGuests,
+      roomUnitsRequested: numUnits,
+      currency: 'LKR',
+      pricePerNightLkr: basePrice,
+      extraGuestFeeLkr: 0,
+      breakfastFeePerGuestLkr: 0,
+      quotedTotalLkr
+    }
+  });
+});
+
+// --- TRAVELER & PROVIDER BOOKING APIS (PHASE 05-A1) ---
+
+// POST /api/bookings - Create pending reservation request
+app.post('/api/bookings', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { listingId, roomId, checkInDate, checkOutDate, guests, roomUnitsRequested, selectedBreakfast } = req.body || {};
+
+  const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+  if (!checkInDate || !DATE_REGEX.test(checkInDate) || !checkOutDate || !DATE_REGEX.test(checkOutDate)) {
+    return res.status(400).json({
+      error: 'Invalid check-in or check-out date format. Must be YYYY-MM-DD',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const checkIn = new Date(checkInDate + 'T00:00:00.000Z');
+  const checkOut = new Date(checkOutDate + 'T00:00:00.000Z');
+
+  if (checkOut <= checkIn) {
+    return res.status(400).json({
+      error: 'checkOutDate must be after checkInDate',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const nights = Math.round((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+  if (nights < 1 || nights > 14) {
+    return res.status(400).json({
+      error: 'Booking duration must be between 1 and 14 nights',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const numGuests = typeof guests === 'number' && Number.isInteger(guests) && guests > 0 ? guests : 1;
+  const numUnits = typeof roomUnitsRequested === 'number' && Number.isInteger(roomUnitsRequested) && roomUnitsRequested > 0 ? roomUnitsRequested : 1;
+
+  const now = Date.now();
+  const bookingId = 'booking_' + now + '_' + Math.floor(Math.random() * 1000);
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const publicListingSnap = await db.collection('publicListings').doc(listingId).get();
+
+      if (!publicListingSnap.exists || publicListingSnap.data().status !== 'published') {
+        return res.status(400).json({
+          error: 'Homestay listing is not published or eligible for booking',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const providerUid = publicListingSnap.data().providerUid;
+      if (providerUid === callerUid) {
+        return res.status(400).json({
+          error: 'Providers cannot book their own property',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const roomRef = db.collection('providerProfiles').doc(providerUid)
+        .collection('listings').doc(listingId)
+        .collection('rooms').doc(roomId);
+
+      const roomSnap = await roomRef.get();
+      if (!roomSnap.exists) {
+        return res.status(404).json({
+          error: 'Selected room not found in specified listing',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const roomData = roomSnap.data();
+      const pricingSnap = await roomRef.collection('pricing').doc('current').get();
+
+      if (!pricingSnap.exists) {
+        return res.status(400).json({
+          error: 'Room pricing is missing or not configured',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const pricing = pricingSnap.data();
+      if (numGuests > roomData.maxGuestsPerUnit * numUnits) {
+        return res.status(400).json({
+          error: `Number of guests (${numGuests}) exceeds room capacity (${roomData.maxGuestsPerUnit * numUnits})`,
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const basePrice = pricing.pricePerNightLkr;
+      const extraGuestsCount = Math.max(0, numGuests - (pricing.includedGuests * numUnits));
+      const extraGuestFeePerNight = extraGuestsCount * pricing.extraGuestFeeLkr;
+      const breakfastFeePerNight = (selectedBreakfast === true && pricing.breakfastOffered === true) ? (numGuests * pricing.breakfastFeePerGuestLkr) : 0;
+
+      const nightlyTotal = (basePrice * numUnits) + extraGuestFeePerNight + breakfastFeePerNight;
+      const quotedTotalLkr = nightlyTotal * nights;
+
+      const bookingData = {
+        bookingId,
+        travelerUid: callerUid,
+        providerUid,
+        listingId,
+        roomId,
+        roomUnitsRequested: numUnits,
+        guests: numGuests,
+        checkInDate,
+        checkOutDate,
+        nights,
+        selectedBreakfast: selectedBreakfast === true,
+        currency: 'LKR',
+        pricePerNightLkr: basePrice,
+        extraGuestFeeLkr: extraGuestFeePerNight,
+        breakfastFeePerGuestLkr: breakfastFeePerNight,
+        quotedTotalLkr,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+        confirmedAt: null,
+        cancelledAt: null
+      };
+
+      await db.collection('bookings').doc(bookingId).set(bookingData);
+
+      return res.json({
+        status: 'success',
+        message: 'Booking request created successfully and is pending provider confirmation',
+        data: bookingData
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to create booking request: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // Mock Mode Response
+  const mockBooking = {
+    bookingId,
+    travelerUid: callerUid,
+    providerUid: 'provider_user_123',
+    listingId,
+    roomId,
+    roomUnitsRequested: numUnits,
+    guests: numGuests,
+    checkInDate,
+    checkOutDate,
+    nights,
+    selectedBreakfast: selectedBreakfast === true,
+    currency: 'LKR',
+    pricePerNightLkr: 9500,
+    extraGuestFeeLkr: 0,
+    breakfastFeePerGuestLkr: 0,
+    quotedTotalLkr: 9500 * numUnits * nights,
+    status: 'pending',
+    createdAt: now,
+    updatedAt: now
+  };
+
+  return res.json({
+    status: 'success',
+    message: 'Booking request created successfully and is pending provider confirmation',
+    data: mockBooking
+  });
+});
+
+// GET /api/bookings/mine - List authenticated traveler's bookings
+app.get('/api/bookings/mine', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const snapshot = await db.collection('bookings')
+        .where('travelerUid', '==', callerUid)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const list = [];
+      snapshot.forEach(doc => list.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve traveler bookings: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    total: 1,
+    data: [{
+      bookingId: 'booking_1001',
+      travelerUid: callerUid,
+      providerUid: 'provider_user_123',
+      listingId: 'listing_123',
+      roomId: 'room_101',
+      checkInDate: '2026-11-10',
+      checkOutDate: '2026-11-12',
+      status: 'pending',
+      quotedTotalLkr: 19000
+    }]
+  });
+});
+
+// GET /api/provider/bookings - List bookings received by authenticated provider
+app.get('/api/provider/bookings', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const snapshot = await db.collection('bookings')
+        .where('providerUid', '==', callerUid)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const list = [];
+      snapshot.forEach(doc => list.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve provider bookings: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    total: 1,
+    data: [{
+      bookingId: 'booking_1001',
+      travelerUid: 'traveler_user_123',
+      providerUid: callerUid,
+      listingId: 'listing_123',
+      roomId: 'room_101',
+      checkInDate: '2026-11-10',
+      checkOutDate: '2026-11-12',
+      status: 'pending',
+      quotedTotalLkr: 19000
+    }]
+  });
+});
+
+// POST /api/provider/bookings/:bookingId/decision - Transaction-safe double-booking prevention on provider confirmation
+app.post('/api/provider/bookings/:bookingId/decision', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const bookingId = req.params.bookingId;
+  const { decision } = req.body || {};
+
+  const ALLOWED_DECISIONS = ['accept', 'decline'];
+  if (!decision || !ALLOWED_DECISIONS.includes(decision)) {
+    return res.status(400).json({
+      error: 'Invalid or missing decision parameter. Must be "accept" or "decline"',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+
+      const resultStatus = await db.runTransaction(async (transaction) => {
+        const bookingRef = db.collection('bookings').doc(bookingId);
+        const bookingSnap = await transaction.get(bookingRef);
+
+        if (!bookingSnap.exists) {
+          throw new Error('BOOKING_NOT_FOUND');
+        }
+
+        const booking = bookingSnap.data();
+
+        if (booking.providerUid !== callerUid) {
+          throw new Error('FORBIDDEN_OWNERSHIP');
+        }
+
+        if (booking.status !== 'pending') {
+          throw new Error('INVALID_STATUS_TRANSITION');
+        }
+
+        if (decision === 'decline') {
+          transaction.update(bookingRef, {
+            status: 'declined',
+            updatedAt: now
+          });
+          return 'declined';
+        }
+
+        // Decision is ACCEPT: Verify capacity across all occupied dates in FIRESTORE TRANSACTION!
+        const roomRef = db.collection('providerProfiles').doc(callerUid)
+          .collection('listings').doc(booking.listingId)
+          .collection('rooms').doc(booking.roomId);
+
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists) {
+          throw new Error('ROOM_NOT_FOUND');
+        }
+
+        const totalUnits = roomSnap.data().totalUnits || 1;
+        const requestedUnits = booking.roomUnitsRequested || 1;
+        const occupiedDates = getOccupiedDates(booking.checkInDate, booking.checkOutDate);
+
+        // Read all occupied date documents in transaction
+        const dayRefs = occupiedDates.map(dStr => roomRef.collection('availabilityDays').doc(dStr));
+        const daySnaps = await Promise.all(dayRefs.map(ref => transaction.get(ref)));
+
+        // Check availability on EVERY occupied night
+        for (let i = 0; i < occupiedDates.length; i++) {
+          const snap = daySnaps[i];
+          const dStr = occupiedDates[i];
+          let blockedUnits = 0;
+          let confirmedBookedUnits = 0;
+
+          if (snap.exists) {
+            const data = snap.data();
+            blockedUnits = data.blockedUnits || 0;
+            confirmedBookedUnits = data.confirmedBookedUnits || 0;
+          }
+
+          const remainingUnits = totalUnits - blockedUnits - confirmedBookedUnits;
+          if (remainingUnits < requestedUnits) {
+            throw new Error(`INSUFFICIENT_CAPACITY:${dStr}`);
+          }
+        }
+
+        // Allocate capacity across all occupied nights atomically
+        for (let i = 0; i < occupiedDates.length; i++) {
+          const snap = daySnaps[i];
+          const dayRef = dayRefs[i];
+          const dStr = occupiedDates[i];
+          let blockedUnits = 0;
+          let confirmedBookedUnits = 0;
+
+          if (snap.exists) {
+            const data = snap.data();
+            blockedUnits = data.blockedUnits || 0;
+            confirmedBookedUnits = data.confirmedBookedUnits || 0;
+          }
+
+          transaction.set(dayRef, {
+            date: dStr,
+            blockedUnits,
+            confirmedBookedUnits: confirmedBookedUnits + requestedUnits,
+            updatedAt: now
+          }, { merge: true });
+        }
+
+        // Confirm booking status
+        transaction.update(bookingRef, {
+          status: 'confirmed',
+          confirmedAt: now,
+          updatedAt: now
+        });
+
+        return 'confirmed';
+      });
+
+      return res.json({
+        status: 'success',
+        message: `Booking request ${decision}ed successfully`,
+        data: {
+          bookingId,
+          status: resultStatus,
+          updatedAt: now
+        }
+      });
+    } catch (err) {
+      if (err.message.startsWith('INSUFFICIENT_CAPACITY')) {
+        return res.status(400).json({
+          error: 'Insufficient room unit capacity available for selected booking dates',
+          code: 'DOUBLE_BOOKING_PREVENTED'
+        });
+      }
+      if (err.message === 'FORBIDDEN_OWNERSHIP') {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own the property for this booking request',
+          code: 'FORBIDDEN'
+        });
+      }
+      if (err.message === 'INVALID_STATUS_TRANSITION') {
+        return res.status(400).json({
+          error: 'Booking request is no longer in pending state',
+          code: 'BAD_REQUEST'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to process booking decision: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  // Mock Mode Response
+  const newStatus = decision === 'accept' ? 'confirmed' : 'declined';
+  return res.json({
+    status: 'success',
+    message: `Booking request ${decision}ed successfully`,
+    data: {
+      bookingId,
+      status: newStatus,
+      updatedAt: now
+    }
+  });
+});
+
+// POST /api/bookings/:bookingId/cancel - Cancel booking request and release confirmed allocations
+app.post('/api/bookings/:bookingId/cancel', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const bookingId = req.params.bookingId;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+
+      await db.runTransaction(async (transaction) => {
+        const bookingRef = db.collection('bookings').doc(bookingId);
+        const bookingSnap = await transaction.get(bookingRef);
+
+        if (!bookingSnap.exists) {
+          throw new Error('BOOKING_NOT_FOUND');
+        }
+
+        const booking = bookingSnap.data();
+
+        if (booking.travelerUid !== callerUid && booking.providerUid !== callerUid) {
+          throw new Error('FORBIDDEN_OWNERSHIP');
+        }
+
+        if (booking.status === 'cancelled' || booking.status === 'declined') {
+          return;
+        }
+
+        const wasConfirmed = booking.status === 'confirmed';
+
+        if (wasConfirmed) {
+          const roomRef = db.collection('providerProfiles').doc(booking.providerUid)
+            .collection('listings').doc(booking.listingId)
+            .collection('rooms').doc(booking.roomId);
+
+          const requestedUnits = booking.roomUnitsRequested || 1;
+          const occupiedDates = getOccupiedDates(booking.checkInDate, booking.checkOutDate);
+
+          const dayRefs = occupiedDates.map(dStr => roomRef.collection('availabilityDays').doc(dStr));
+          const daySnaps = await Promise.all(dayRefs.map(ref => transaction.get(ref)));
+
+          for (let i = 0; i < occupiedDates.length; i++) {
+            const snap = daySnaps[i];
+            const dayRef = dayRefs[i];
+            const dStr = occupiedDates[i];
+
+            if (snap.exists) {
+              const data = snap.data();
+              const currentConfirmed = data.confirmedBookedUnits || 0;
+              const newConfirmed = Math.max(0, currentConfirmed - requestedUnits);
+
+              transaction.set(dayRef, {
+                date: dStr,
+                confirmedBookedUnits: newConfirmed,
+                updatedAt: now
+              }, { merge: true });
+            }
+          }
+        }
+
+        transaction.update(bookingRef, {
+          status: 'cancelled',
+          cancelledAt: now,
+          updatedAt: now
+        });
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Booking cancelled successfully',
+        data: {
+          bookingId,
+          status: 'cancelled',
+          cancelledAt: now
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to cancel booking: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Booking cancelled successfully',
+    data: {
+      bookingId,
+      status: 'cancelled',
+      cancelledAt: now
+    }
+  });
+});
+
 // --- ROOM AVAILABILITY CALENDAR ENDPOINTS (PHASE 04-C3-1) ---
 
 // GET /api/provider/listings/:listingId/rooms/:roomId/availability - Retrieve blocked availability days
@@ -96,7 +835,7 @@ app.get('/api/provider/listings/:listingId/rooms/:roomId/availability', requireF
   });
 });
 
-// PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date - Update blocked units for specific calendar date
+// PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date - Transaction-safe update of blocked units
 app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', requireFirebaseUser, async (req, res) => {
   const callerUid = req.auth.uid;
   const { listingId, roomId, date } = req.params;
@@ -127,41 +866,55 @@ app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', re
         .collection('listings').doc(listingId)
         .collection('rooms').doc(roomId);
 
-      const roomSnap = await roomRef.get();
-      if (!roomSnap.exists) {
+      const dayData = await db.runTransaction(async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists) {
+          throw new Error('ROOM_NOT_FOUND');
+        }
+
+        const totalUnits = roomSnap.data().totalUnits || 1;
+        const dayRef = roomRef.collection('availabilityDays').doc(date);
+        const daySnap = await transaction.get(dayRef);
+
+        let currentConfirmedBooked = 0;
+        if (daySnap.exists) {
+          currentConfirmedBooked = daySnap.data().confirmedBookedUnits || 0;
+        }
+
+        if (blockedUnits + currentConfirmedBooked > totalUnits) {
+          throw new Error(`CAPACITY_EXCEEDED:${blockedUnits}:${currentConfirmedBooked}:${totalUnits}`);
+        }
+
+        const dataToSave = {
+          date,
+          blockedUnits,
+          note: noteText,
+          updatedAt: now
+        };
+
+        transaction.set(dayRef, dataToSave, { merge: true });
+        return { ...dataToSave, totalUnits };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Room availability updated successfully',
+        data: dayData
+      });
+    } catch (err) {
+      if (err.message.startsWith('CAPACITY_EXCEEDED')) {
+        const parts = err.message.split(':');
+        return res.status(400).json({
+          error: `blockedUnits (${parts[1]}) + confirmed booked units (${parts[2]}) cannot exceed total room units (${parts[3]})`,
+          code: 'BAD_REQUEST'
+        });
+      }
+      if (err.message === 'ROOM_NOT_FOUND') {
         return res.status(404).json({
           error: 'Room not found or caller is not owner',
           code: 'NOT_FOUND'
         });
       }
-
-      const totalUnits = roomSnap.data().totalUnits || 1;
-      if (blockedUnits > totalUnits) {
-        return res.status(400).json({
-          error: `blockedUnits (${blockedUnits}) cannot exceed total room units (${totalUnits})`,
-          code: 'BAD_REQUEST'
-        });
-      }
-
-      const dayRef = roomRef.collection('availabilityDays').doc(date);
-      const dayData = {
-        date,
-        blockedUnits,
-        note: noteText,
-        updatedAt: now
-      };
-
-      await dayRef.set(dayData, { merge: true });
-
-      return res.json({
-        status: 'success',
-        message: 'Room availability updated successfully',
-        data: {
-          ...dayData,
-          totalUnits
-        }
-      });
-    } catch (err) {
       return res.status(500).json({
         error: 'Failed to update room availability: ' + err.message,
         code: 'INTERNAL_ERROR'
@@ -186,6 +939,89 @@ app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', re
       totalUnits: 2,
       updatedAt: now
     }
+  });
+});
+
+// DELETE /api/provider/listings/:listingId/rooms/:roomId - Safe server-side cascading room deletion
+app.delete('/api/provider/listings/:listingId/rooms/:roomId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { listingId, roomId } = req.params;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const listingRef = db.collection('providerProfiles').doc(callerUid).collection('listings').doc(listingId);
+      const listingSnap = await listingRef.get();
+
+      if (!listingSnap.exists) {
+        return res.status(404).json({
+          error: 'Listing not found or caller is not owner',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      if (listingSnap.data().status !== 'draft') {
+        return res.status(400).json({
+          error: 'Room inventory can only be deleted from private draft listings',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const roomRef = listingRef.collection('rooms').doc(roomId);
+      const roomSnap = await roomRef.get();
+
+      if (!roomSnap.exists) {
+        return res.status(404).json({
+          error: 'Room not found in specified draft listing',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      // Check for active confirmed bookings before deleting room
+      const activeBookingsSnap = await db.collection('bookings')
+        .where('roomId', '==', roomId)
+        .where('status', '==', 'confirmed')
+        .get();
+
+      if (!activeBookingsSnap.isEmpty) {
+        return res.status(400).json({
+          error: 'Cannot delete room with active confirmed bookings',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      // Fetch availability subcollection documents
+      const daysSnap = await roomRef.collection('availabilityDays').get();
+      const batch = db.batch();
+
+      daysSnap.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Delete pricing document and room document
+      const pricingRef = roomRef.collection('pricing').doc('current');
+      batch.delete(pricingRef);
+      batch.delete(roomRef);
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'Room inventory and subcollections deleted successfully',
+        data: { listingId, roomId }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to delete room inventory: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Room inventory and subcollections deleted successfully',
+    data: { listingId, roomId }
   });
 });
 
@@ -1911,7 +2747,7 @@ app.get('/api/public-plans', async (req, res) => {
         page,
         limit,
         total: publicPlans.length,
-        data: list
+        data: publicPlans
       });
     } catch (err) {
       return res.status(500).json({
