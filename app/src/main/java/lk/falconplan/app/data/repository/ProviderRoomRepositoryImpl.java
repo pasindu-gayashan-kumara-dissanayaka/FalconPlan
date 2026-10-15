@@ -118,13 +118,24 @@ public class ProviderRoomRepositoryImpl implements ProviderRoomRepository {
 
         DocumentReference pricingRef = roomRef.collection("pricing").document("current");
 
-        WriteBatch batch = db.batch();
-        batch.delete(pricingRef);
-        batch.delete(roomRef);
+        roomRef.collection("availabilityDays").get()
+                .addOnSuccessListener(querySnapshots -> {
+                    WriteBatch batch = db.batch();
 
-        batch.commit()
-                .addOnSuccessListener(aVoid -> {
-                    if (callback != null) callback.onSuccess();
+                    for (DocumentSnapshot doc : querySnapshots) {
+                        batch.delete(doc.getReference());
+                    }
+
+                    batch.delete(pricingRef);
+                    batch.delete(roomRef);
+
+                    batch.commit()
+                            .addOnSuccessListener(aVoid -> {
+                                if (callback != null) callback.onSuccess();
+                            })
+                            .addOnFailureListener(e -> {
+                                if (callback != null) callback.onError(e);
+                            });
                 })
                 .addOnFailureListener(e -> {
                     if (callback != null) callback.onError(e);

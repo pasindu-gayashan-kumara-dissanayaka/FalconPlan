@@ -50,6 +50,101 @@ public class BackendApiClient {
         return instance;
     }
 
+    // --- ROOM AVAILABILITY ENDPOINTS (PHASE 04-C3-1/2) ---
+
+    public void getRoomAvailability(String idToken, String listingId, String roomId, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "provider/listings/" + listingId + "/rooms/" + roomId + "/availability");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + BASE_URLS[0] + "). Please ensure Express server is running on port 3000.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
+    public void updateRoomAvailability(String idToken, String listingId, String roomId, String dateStr, int blockedUnits, String note, ApiCallback<JSONObject> callback) {
+        executor.execute(() -> {
+            Exception lastException = null;
+            for (String baseUrl : BASE_URLS) {
+                try {
+                    URL url = new URL(baseUrl + "provider/listings/" + listingId + "/rooms/" + roomId + "/availability/" + dateStr);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("PUT");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    if (idToken != null && !idToken.isEmpty()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                    }
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+                    conn.setDoOutput(true);
+
+                    JSONObject jsonBody = new JSONObject();
+                    jsonBody.put("blockedUnits", blockedUnits);
+                    if (note != null && !note.isEmpty()) {
+                        jsonBody.put("note", note);
+                    }
+
+                    try (OutputStream os = conn.getOutputStream()) {
+                        byte[] input = jsonBody.toString().getBytes(StandardCharsets.UTF_8);
+                        os.write(input, 0, input.length);
+                    }
+
+                    int statusCode = conn.getResponseCode();
+                    if (statusCode == 200) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+
+                        JSONObject resJson = new JSONObject(response.toString());
+                        JSONObject dataJson = resJson.optJSONObject("data");
+                        mainHandler.post(() -> callback.onSuccess(dataJson));
+                        return;
+                    } else {
+                        lastException = new Exception("Backend Error (" + statusCode + ")");
+                    }
+                } catch (Exception e) {
+                    lastException = e;
+                }
+            }
+
+            Exception finalErr = lastException != null ? lastException : new Exception("Failed to connect to backend (" + BASE_URLS[0] + "). Please ensure Express server is running on port 3000.");
+            mainHandler.post(() -> callback.onError(finalErr));
+        });
+    }
+
     // --- PROVIDER LISTING SUBMISSION ENDPOINT ---
 
     public void submitListing(String idToken, String listingId, ApiCallback<JSONObject> callback) {

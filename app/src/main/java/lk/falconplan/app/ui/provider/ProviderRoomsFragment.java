@@ -111,6 +111,13 @@ public class ProviderRoomsFragment extends Fragment implements ProviderRoomAdapt
     }
 
     @Override
+    public void onCalendarClick(ProviderRoom room) {
+        if (getActivity() instanceof MainActivity && room != null && room.getId() != null) {
+            ((MainActivity) getActivity()).loadMainContentFragment(RoomAvailabilityCalendarFragment.newInstance(listingId, room.getId()), true);
+        }
+    }
+
+    @Override
     public void onPricingClick(ProviderRoom room) {
         if (getActivity() instanceof MainActivity && room != null && room.getId() != null) {
             ((MainActivity) getActivity()).loadMainContentFragment(RoomPricingFragment.newInstance(listingId, room.getId()), true);
