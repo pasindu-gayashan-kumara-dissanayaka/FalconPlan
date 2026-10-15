@@ -305,6 +305,44 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.paymentId, 'booking_1001');
   });
 
+  test('POST /api/payments/:paymentId/receipts uploads receipt proof and transitions status to under_review', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      mimeType: 'image/jpeg',
+      fileBase64: '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP123456789012345678901234567890'
+    });
+
+    const res = await makeRequest('/api/payments/booking_1001/receipts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.paymentStatus, 'under_review');
+    assert.ok(res.json.data.receiptId);
+  });
+
+  test('GET /api/payments/:paymentId/receipts/:receiptId/preview returns short-lived preview link', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/payments/booking_1001/receipts/receipt_123/preview', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.receiptId, 'receipt_123');
+    assert.ok(res.json.data.authorizedPreviewUrl);
+  });
+
   // --- ROOM AVAILABILITY CALENDAR TESTS (PHASE 04-C3-1) ---
 
   test('GET /api/provider/listings/:listingId/rooms/:roomId/availability returns blocked days list', async () => {

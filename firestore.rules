@@ -293,6 +293,12 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read: if isSignedIn() && (request.auth.uid == resource.data.travelerUid || request.auth.uid == resource.data.providerUid);
       allow write: if false; // Server-managed via trusted Express Backend / Admin SDK
+
+      // Payment Receipts Subcollection: payments/{paymentId}/receipts/{receiptId}
+      match /receipts/{receiptId} {
+        allow read: if isSignedIn() && (request.auth.uid == get(/databases/$(database)/documents/payments/$(paymentId)).data.travelerUid || request.auth.uid == get(/databases/$(database)/documents/payments/$(paymentId)).data.providerUid);
+        allow write: if false; // Private storage metadata managed via trusted Express Backend / Admin SDK
+      }
     }
 
     // Payment Audit Logs: paymentAuditLogs/{logId}

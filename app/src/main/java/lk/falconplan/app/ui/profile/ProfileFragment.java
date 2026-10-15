@@ -91,6 +91,15 @@ public class ProfileFragment extends Fragment {
             });
         }
 
+        View btnMyPayments = view.findViewById(R.id.btnMyPayments);
+        if (btnMyPayments != null) {
+            btnMyPayments.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(lk.falconplan.app.ui.booking.MyPaymentsFragment.newInstance(), true);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnSignOut).setOnClickListener(v -> {
             authViewModel.signOut();
             if (getActivity() instanceof MainActivity) {

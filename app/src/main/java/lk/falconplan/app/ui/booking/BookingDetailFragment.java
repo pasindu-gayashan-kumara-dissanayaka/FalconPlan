@@ -16,6 +16,7 @@ import androidx.fragment.app.Fragment;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
+import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
 import lk.falconplan.app.data.model.Booking;
 import lk.falconplan.app.data.repository.BookingRepository;
@@ -65,6 +66,15 @@ public class BookingDetailFragment extends Fragment {
         view.findViewById(R.id.btnBack).setOnClickListener(v -> requireActivity().getOnBackPressedDispatcher().onBackPressed());
         view.findViewById(R.id.btnCancelRequest).setOnClickListener(v -> cancelCurrentBooking());
 
+        View btnProceedPayment = view.findViewById(R.id.btnProceedPayment);
+        if (btnProceedPayment != null) {
+            btnProceedPayment.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity && bookingId != null) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(BookingPaymentFragment.newInstance(bookingId), true);
+                }
+            });
+        }
+
         loadBookingDetail();
     }
 
@@ -104,6 +114,15 @@ public class BookingDetailFragment extends Fragment {
         txtDatesNights.setText(String.format("Check-in: %s • Check-out: %s (%d Nights)",
                 booking.getCheckInDate(), booking.getCheckOutDate(), booking.getNights()));
         txtTotalAmount.setText(String.format("Quoted Total: %s", booking.getFormattedPrice()));
+
+        View btnProceedPayment = getView() != null ? getView().findViewById(R.id.btnProceedPayment) : null;
+        if (btnProceedPayment != null) {
+            if (Booking.STATUS_CONFIRMED.equals(booking.getStatus())) {
+                btnProceedPayment.setVisibility(View.VISIBLE);
+            } else {
+                btnProceedPayment.setVisibility(View.GONE);
+            }
+        }
     }
 
     private void cancelCurrentBooking() {
