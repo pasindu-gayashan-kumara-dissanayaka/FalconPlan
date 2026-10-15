@@ -835,7 +835,7 @@ app.get('/api/provider/listings/:listingId/rooms/:roomId/availability', requireF
   });
 });
 
-// PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date - Update blocked units for specific calendar date
+// PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date - Transaction-safe update of blocked units
 app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', requireFirebaseUser, async (req, res) => {
   const callerUid = req.auth.uid;
   const { listingId, roomId, date } = req.params;
@@ -866,49 +866,55 @@ app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', re
         .collection('listings').doc(listingId)
         .collection('rooms').doc(roomId);
 
-      const roomSnap = await roomRef.get();
-      if (!roomSnap.exists) {
+      const dayData = await db.runTransaction(async (transaction) => {
+        const roomSnap = await transaction.get(roomRef);
+        if (!roomSnap.exists) {
+          throw new Error('ROOM_NOT_FOUND');
+        }
+
+        const totalUnits = roomSnap.data().totalUnits || 1;
+        const dayRef = roomRef.collection('availabilityDays').doc(date);
+        const daySnap = await transaction.get(dayRef);
+
+        let currentConfirmedBooked = 0;
+        if (daySnap.exists) {
+          currentConfirmedBooked = daySnap.data().confirmedBookedUnits || 0;
+        }
+
+        if (blockedUnits + currentConfirmedBooked > totalUnits) {
+          throw new Error(`CAPACITY_EXCEEDED:${blockedUnits}:${currentConfirmedBooked}:${totalUnits}`);
+        }
+
+        const dataToSave = {
+          date,
+          blockedUnits,
+          note: noteText,
+          updatedAt: now
+        };
+
+        transaction.set(dayRef, dataToSave, { merge: true });
+        return { ...dataToSave, totalUnits };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Room availability updated successfully',
+        data: dayData
+      });
+    } catch (err) {
+      if (err.message.startsWith('CAPACITY_EXCEEDED')) {
+        const parts = err.message.split(':');
+        return res.status(400).json({
+          error: `blockedUnits (${parts[1]}) + confirmed booked units (${parts[2]}) cannot exceed total room units (${parts[3]})`,
+          code: 'BAD_REQUEST'
+        });
+      }
+      if (err.message === 'ROOM_NOT_FOUND') {
         return res.status(404).json({
           error: 'Room not found or caller is not owner',
           code: 'NOT_FOUND'
         });
       }
-
-      const totalUnits = roomSnap.data().totalUnits || 1;
-
-      // Read current confirmed booked units for this date to prevent overwriting confirmed bookings
-      const dayRef = roomRef.collection('availabilityDays').doc(date);
-      const daySnap = await dayRef.get();
-      let currentConfirmedBooked = 0;
-      if (daySnap.exists) {
-        currentConfirmedBooked = daySnap.data().confirmedBookedUnits || 0;
-      }
-
-      if (blockedUnits + currentConfirmedBooked > totalUnits) {
-        return res.status(400).json({
-          error: `blockedUnits (${blockedUnits}) + confirmed booked units (${currentConfirmedBooked}) cannot exceed total room units (${totalUnits})`,
-          code: 'BAD_REQUEST'
-        });
-      }
-
-      const dayData = {
-        date,
-        blockedUnits,
-        note: noteText,
-        updatedAt: now
-      };
-
-      await dayRef.set(dayData, { merge: true });
-
-      return res.json({
-        status: 'success',
-        message: 'Room availability updated successfully',
-        data: {
-          ...dayData,
-          totalUnits
-        }
-      });
-    } catch (err) {
       return res.status(500).json({
         error: 'Failed to update room availability: ' + err.message,
         code: 'INTERNAL_ERROR'
