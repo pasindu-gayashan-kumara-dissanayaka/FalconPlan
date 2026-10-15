@@ -22,6 +22,7 @@ public class ProviderRoomAdapter extends RecyclerView.Adapter<ProviderRoomAdapte
     private OnRoomActionListener listener;
 
     public interface OnRoomActionListener {
+        void onPricingClick(ProviderRoom room);
         void onEditClick(ProviderRoom room);
         void onDeleteClick(ProviderRoom room);
     }
@@ -63,6 +64,7 @@ public class ProviderRoomAdapter extends RecyclerView.Adapter<ProviderRoomAdapte
         private final TextView txtTypeBadge;
         private final TextView txtUnitsCapacity;
         private final TextView txtBedBathroomDetails;
+        private final Button btnManagePricing;
         private final Button btnEditRoom;
         private final Button btnDeleteRoom;
 
@@ -72,6 +74,7 @@ public class ProviderRoomAdapter extends RecyclerView.Adapter<ProviderRoomAdapte
             txtTypeBadge = itemView.findViewById(R.id.txtTypeBadge);
             txtUnitsCapacity = itemView.findViewById(R.id.txtUnitsCapacity);
             txtBedBathroomDetails = itemView.findViewById(R.id.txtBedBathroomDetails);
+            btnManagePricing = itemView.findViewById(R.id.btnManagePricing);
             btnEditRoom = itemView.findViewById(R.id.btnEditRoom);
             btnDeleteRoom = itemView.findViewById(R.id.btnDeleteRoom);
         }
@@ -87,6 +90,10 @@ public class ProviderRoomAdapter extends RecyclerView.Adapter<ProviderRoomAdapte
                     item.getBedCount(), item.getBedType(),
                     item.getBathroomType() != null ? item.getBathroomType() : "Private",
                     item.getAmenities() != null ? item.getAmenities() : ""));
+
+            btnManagePricing.setOnClickListener(v -> {
+                if (listener != null) listener.onPricingClick(item);
+            });
 
             btnEditRoom.setOnClickListener(v -> {
                 if (listener != null) listener.onEditClick(item);

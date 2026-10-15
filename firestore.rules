@@ -189,6 +189,51 @@ service cloud.firestore {
 
         allow delete: if isOwner(userId)
           && resource.data.status == 'draft';
+
+        // Listing Photos Subcollection: providerProfiles/{userId}/listings/{listingId}/photos/{photoId}
+        match /photos/{photoId} {
+          allow read: if isOwner(userId);
+          allow write: if false; // Server-managed via trusted Express Backend / Admin SDK
+        }
+
+        // Provider Rooms Subcollection: providerProfiles/{userId}/listings/{listingId}/rooms/{roomId}
+        match /rooms/{roomId} {
+          allow read: if isOwner(userId);
+
+          allow create: if isOwner(userId)
+            && get(/databases/$(database)/documents/providerProfiles/$(userId)/listings/$(listingId)).data.status == 'draft'
+            && get(/databases/$(database)/documents/providerProfiles/$(userId)/listings/$(listingId)).data.listingType == 'homestay'
+            && request.resource.data.keys().hasOnly(['id', 'providerUid', 'listingId', 'roomName', 'roomType', 'description', 'totalUnits', 'maxGuestsPerUnit', 'bedCount', 'bedType', 'bathroomType', 'amenities', 'createdAt', 'updatedAt'])
+            && request.resource.data.id == roomId
+            && request.resource.data.providerUid == userId
+            && request.resource.data.listingId == listingId
+            && (request.resource.data.roomType == 'single' || request.resource.data.roomType == 'double' || request.resource.data.roomType == 'twin' || request.resource.data.roomType == 'family' || request.resource.data.roomType == 'dormitory' || request.resource.data.roomType == 'other')
+            && request.resource.data.roomName is string && request.resource.data.roomName.size() > 0 && request.resource.data.roomName.size() <= 100
+            && request.resource.data.description is string && request.resource.data.description.size() <= 500
+            && request.resource.data.totalUnits is number && request.resource.data.totalUnits > 0
+            && request.resource.data.maxGuestsPerUnit is number && request.resource.data.maxGuestsPerUnit > 0
+            && request.resource.data.bedCount is number && request.resource.data.bedCount >= 0
+            && (request.resource.data.bathroomType == 'private' || request.resource.data.bathroomType == 'shared');
+
+          allow update: if isOwner(userId)
+            && resource.data.providerUid == userId
+            && get(/databases/$(database)/documents/providerProfiles/$(userId)/listings/$(listingId)).data.status == 'draft'
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'providerUid', 'listingId', 'createdAt'])
+            && request.resource.data.id == resource.data.id
+            && request.resource.data.providerUid == resource.data.providerUid
+            && request.resource.data.listingId == resource.data.listingId
+            && request.resource.data.createdAt == resource.data.createdAt
+            && (request.resource.data.roomType == 'single' || request.resource.data.roomType == 'double' || request.resource.data.roomType == 'twin' || request.resource.data.roomType == 'family' || request.resource.data.roomType == 'dormitory' || request.resource.data.roomType == 'other')
+            && request.resource.data.roomName is string && request.resource.data.roomName.size() > 0 && request.resource.data.roomName.size() <= 100
+            && request.resource.data.description is string && request.resource.data.description.size() <= 500
+            && request.resource.data.totalUnits is number && request.resource.data.totalUnits > 0
+            && request.resource.data.maxGuestsPerUnit is number && request.resource.data.maxGuestsPerUnit > 0
+            && request.resource.data.bedCount is number && request.resource.data.bedCount >= 0
+            && (request.resource.data.bathroomType == 'private' || request.resource.data.bathroomType == 'shared');
+
+          allow delete: if isOwner(userId)
+            && get(/databases/$(database)/documents/providerProfiles/$(userId)/listings/$(listingId)).data.status == 'draft';
+        }
       }
     }
 
@@ -205,6 +250,16 @@ service cloud.firestore {
     // Public Travel Plans Collection: publicTravelPlans/{planId}
     match /publicTravelPlans/{planId} {
       allow read, write: if false; // Deny direct client read and write; all public plan browsing uses trusted backend
+    }
+
+    // Public Listings Collection: publicListings/{listingId}
+    match /publicListings/{listingId} {
+      allow read, write: if false; // Deny direct client read and write; all public listing browsing uses trusted backend
+    }
+
+    // Listing Audit Logs: listingAuditLogs/{logId}
+    match /listingAuditLogs/{logId} {
+      allow read, write: if false; // Append-only via server Admin SDK
     }
 
     // Deny read and write access to all other collections by default
