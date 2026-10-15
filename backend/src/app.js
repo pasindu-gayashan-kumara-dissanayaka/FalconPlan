@@ -233,12 +233,28 @@ app.post('/api/admin/payments/:paymentId/decision', requireFirebaseUser, require
         });
       }
 
+      if (decision === 'verify' && bankReference) {
+        const refStr = String(bankReference).trim();
+        const existingRefSnap = await db.collection('payments')
+          .where('bankReference', '==', refStr)
+          .where('status', '==', 'verified')
+          .get();
+
+        if (!existingRefSnap.isEmpty) {
+          return res.status(400).json({
+            error: 'This bank transaction reference has already been used to verify a different payment',
+            code: 'DUPLICATE_BANK_REFERENCE'
+          });
+        }
+      }
+
       const batch = db.batch();
 
       batch.update(paymentRef, {
         status: newStatus,
         verifiedAt: decision === 'verify' ? now : null,
         verifiedBy: decision === 'verify' ? adminUid : null,
+        bankReference: decision === 'verify' && bankReference ? String(bankReference).trim() : null,
         rejectionReason: rejectionReasonText,
         updatedAt: now
       });
