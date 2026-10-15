@@ -59,7 +59,26 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
         recyclerPosts.setLayoutManager(new LinearLayoutManager(requireContext()));
         postAdapter = new CommunityPostAdapter();
         recyclerPosts.setAdapter(postAdapter);
-        postAdapter.setOnPostClickListener(this::showPostDetailDialog);
+        postAdapter.setOnPostActionListener(new CommunityPostAdapter.OnPostActionListener() {
+            @Override
+            public void onReportClick(CommunityPost post) {
+                Toast.makeText(requireContext(), "Post reported for review.", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onItemClick(CommunityPost post) {
+                showPostDetailDialog(post);
+            }
+        });
+
+        View btnCreatePost = view.findViewById(R.id.btnCreatePost);
+        if (btnCreatePost != null) {
+            btnCreatePost.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(CreateCommunityPostFragment.newInstance(), true);
+                }
+            });
+        }
 
         recyclerPublicPlans.setLayoutManager(new LinearLayoutManager(requireContext()));
         publicPlanAdapter = new PublicPlanAdapter();
