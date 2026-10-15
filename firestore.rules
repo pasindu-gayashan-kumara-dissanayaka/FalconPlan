@@ -245,12 +245,12 @@ service cloud.firestore {
               && get(/databases/$(database)/documents/providerProfiles/$(userId)/listings/$(listingId)).data.listingType == 'homestay'
               && request.resource.data.keys().hasOnly(['currency', 'pricePerNightLkr', 'includedGuests', 'extraGuestFeeLkr', 'breakfastOffered', 'breakfastFeePerGuestLkr', 'createdAt', 'updatedAt'])
               && request.resource.data.currency == 'LKR'
-              && (request.resource.data.pricePerNightLkr is int || (request.resource.data.pricePerNightLkr is number && request.resource.data.pricePerNightLkr % 1 == 0)) && request.resource.data.pricePerNightLkr > 0
-              && (request.resource.data.includedGuests is int || (request.resource.data.includedGuests is number && request.resource.data.includedGuests % 1 == 0)) && request.resource.data.includedGuests > 0
+              && request.resource.data.pricePerNightLkr is int && request.resource.data.pricePerNightLkr > 0
+              && request.resource.data.includedGuests is int && request.resource.data.includedGuests > 0
               && request.resource.data.includedGuests <= get(/databases/$(database)/documents/providerProfiles/$(userId)/listings/$(listingId)/rooms/$(roomId)).data.maxGuestsPerUnit
-              && (request.resource.data.extraGuestFeeLkr is int || (request.resource.data.extraGuestFeeLkr is number && request.resource.data.extraGuestFeeLkr % 1 == 0)) && request.resource.data.extraGuestFeeLkr >= 0
+              && request.resource.data.extraGuestFeeLkr is int && request.resource.data.extraGuestFeeLkr >= 0
               && request.resource.data.breakfastOffered is bool
-              && (request.resource.data.breakfastFeePerGuestLkr is int || (request.resource.data.breakfastFeePerGuestLkr is number && request.resource.data.breakfastFeePerGuestLkr % 1 == 0)) && request.resource.data.breakfastFeePerGuestLkr >= 0
+              && request.resource.data.breakfastFeePerGuestLkr is int && request.resource.data.breakfastFeePerGuestLkr >= 0
               && (request.resource.data.breakfastOffered || request.resource.data.breakfastFeePerGuestLkr == 0);
 
             allow update: if isOwner(userId)
@@ -261,12 +261,12 @@ service cloud.firestore {
               && request.resource.data.keys().hasOnly(['currency', 'pricePerNightLkr', 'includedGuests', 'extraGuestFeeLkr', 'breakfastOffered', 'breakfastFeePerGuestLkr', 'createdAt', 'updatedAt'])
               && request.resource.data.createdAt == resource.data.createdAt
               && request.resource.data.currency == 'LKR'
-              && (request.resource.data.pricePerNightLkr is int || (request.resource.data.pricePerNightLkr is number && request.resource.data.pricePerNightLkr % 1 == 0)) && request.resource.data.pricePerNightLkr > 0
-              && (request.resource.data.includedGuests is int || (request.resource.data.includedGuests is number && request.resource.data.includedGuests % 1 == 0)) && request.resource.data.includedGuests > 0
+              && request.resource.data.pricePerNightLkr is int && request.resource.data.pricePerNightLkr > 0
+              && request.resource.data.includedGuests is int && request.resource.data.includedGuests > 0
               && request.resource.data.includedGuests <= get(/databases/$(database)/documents/providerProfiles/$(userId)/listings/$(listingId)/rooms/$(roomId)).data.maxGuestsPerUnit
-              && (request.resource.data.extraGuestFeeLkr is int || (request.resource.data.extraGuestFeeLkr is number && request.resource.data.extraGuestFeeLkr % 1 == 0)) && request.resource.data.extraGuestFeeLkr >= 0
+              && request.resource.data.extraGuestFeeLkr is int && request.resource.data.extraGuestFeeLkr >= 0
               && request.resource.data.breakfastOffered is bool
-              && (request.resource.data.breakfastFeePerGuestLkr is int || (request.resource.data.breakfastFeePerGuestLkr is number && request.resource.data.breakfastFeePerGuestLkr % 1 == 0)) && request.resource.data.breakfastFeePerGuestLkr >= 0
+              && request.resource.data.breakfastFeePerGuestLkr is int && request.resource.data.breakfastFeePerGuestLkr >= 0
               && (request.resource.data.breakfastOffered || request.resource.data.breakfastFeePerGuestLkr == 0);
 
             allow delete: if isOwner(userId)
