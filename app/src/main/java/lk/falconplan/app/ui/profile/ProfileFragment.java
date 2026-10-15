@@ -100,6 +100,15 @@ public class ProfileFragment extends Fragment {
             });
         }
 
+        View btnAdminPaymentReviews = view.findViewById(R.id.btnAdminPaymentReviews);
+        if (btnAdminPaymentReviews != null) {
+            btnAdminPaymentReviews.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(lk.falconplan.app.ui.admin.AdminPaymentReviewFragment.newInstance(), true);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnSignOut).setOnClickListener(v -> {
             authViewModel.signOut();
             if (getActivity() instanceof MainActivity) {

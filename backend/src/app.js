@@ -2155,6 +2155,7 @@ app.get('/api/public-listings', async (req, res) => {
     page,
     limit,
     total: 0,
+
     data: []
   });
 });
