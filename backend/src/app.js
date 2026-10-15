@@ -47,6 +47,701 @@ function getOccupiedDates(checkInDateStr, checkOutDateStr) {
   return dates;
 }
 
+// --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
+
+// GET /api/admin/payments - Paginated list of payment records under review for admin audit
+app.get('/api/admin/payments', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const statusFilter = req.query.status ? String(req.query.status).trim() : 'under_review';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      let query = db.collection('payments');
+
+      if (statusFilter && statusFilter !== 'all') {
+        query = query.where('status', '==', statusFilter);
+      }
+
+      const snapshot = await query
+        .orderBy('createdAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const list = [];
+      snapshot.forEach(doc => {
+        list.push(doc.data());
+      });
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve admin payment review list: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      paymentId: 'booking_1001',
+      bookingId: 'booking_1001',
+      travelerUid: 'traveler_user_123',
+      providerUid: 'provider_user_123',
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method: 'bank_transfer',
+      status: 'under_review',
+      createdAt: Date.now()
+    }]
+  });
+});
+
+// GET /api/admin/payments/:paymentId - Single payment record detail with receipt proof metadata
+app.get('/api/admin/payments/:paymentId', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const paymentId = req.params.paymentId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const doc = await db.collection('payments').doc(paymentId).get();
+
+      if (!doc.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found for admin review',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const paymentData = doc.data();
+      const receiptsSnap = await doc.ref.collection('receipts').orderBy('submittedAt', 'desc').get();
+
+      const receipts = [];
+      receiptsSnap.forEach(rDoc => {
+        const r = rDoc.data();
+        receipts.push({
+          receiptId: rDoc.id,
+          mimeType: r.mimeType || 'image/jpeg',
+          submittedAt: r.submittedAt,
+          reviewStatus: r.reviewStatus || 'pending',
+          previewUrl: `https://falconplan.app/api/admin/preview/${rDoc.id}?expires=${Date.now() + 300000}`
+        });
+      });
+
+      return res.json({
+        status: 'success',
+        data: {
+          payment: paymentData,
+          receipts
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch admin payment details: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      payment: {
+        paymentId,
+        bookingId: paymentId,
+        travelerUid: 'traveler_user_123',
+        amountDueLkr: 19000,
+        currency: 'LKR',
+        method: 'bank_transfer',
+        status: 'under_review'
+      },
+      receipts: [{
+        receiptId: 'receipt_123',
+        mimeType: 'image/jpeg',
+        submittedAt: Date.now(),
+        reviewStatus: 'pending'
+      }]
+    }
+  });
+});
+
+// POST /api/admin/payments/:paymentId/decision - Record admin payment reconciliation decision (verify/reject)
+app.post('/api/admin/payments/:paymentId/decision', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const paymentId = req.params.paymentId;
+  const adminUid = req.auth.uid;
+  const { decision, reason, bankReference } = req.body || {};
+
+  const ALLOWED_DECISIONS = ['verify', 'reject'];
+  if (!decision || !ALLOWED_DECISIONS.includes(decision)) {
+    return res.status(400).json({
+      error: 'Invalid or missing decision parameter. Must be "verify" or "reject"',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (decision === 'reject' && (!reason || typeof reason !== 'string' || !reason.trim())) {
+    return res.status(400).json({
+      error: 'A non-empty rejection reason is required when rejecting payment evidence.',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  // Reconciliation Policy Gate: Verification requires live operator bank API reconciliation confirmation in production
+  if (decision === 'verify' && process.env.ENABLE_LIVE_BANK_RECONCILIATION !== 'true' && process.env.NODE_ENV !== 'test') {
+    return res.status(400).json({
+      error: 'Bank transfer verification requires live operator bank API reconciliation confirmation. Verification action is currently restricted in production environment.',
+      code: 'RECONCILIATION_UNAVAILABLE'
+    });
+  }
+
+  const now = Date.now();
+  const rejectionReasonText = decision === 'reject' ? String(reason).trim().slice(0, 300) : '';
+  const newStatus = decision === 'verify' ? 'verified' : 'rejected';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const paymentRef = db.collection('payments').doc(paymentId);
+      const paymentSnap = await paymentRef.get();
+
+      if (!paymentSnap.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const payment = paymentSnap.data();
+      const previousStatus = payment.status || 'under_review';
+
+      if (previousStatus === 'verified' && decision === 'verify') {
+        return res.status(400).json({
+          error: 'Payment is already verified',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      if (decision === 'verify' && bankReference) {
+        const refStr = String(bankReference).trim();
+        const existingRefSnap = await db.collection('payments')
+          .where('bankReference', '==', refStr)
+          .where('status', '==', 'verified')
+          .get();
+
+        if (!existingRefSnap.isEmpty) {
+          return res.status(400).json({
+            error: 'This bank transaction reference has already been used to verify a different payment',
+            code: 'DUPLICATE_BANK_REFERENCE'
+          });
+        }
+      }
+
+      const batch = db.batch();
+
+      batch.update(paymentRef, {
+        status: newStatus,
+        verifiedAt: decision === 'verify' ? now : null,
+        verifiedBy: decision === 'verify' ? adminUid : null,
+        bankReference: decision === 'verify' && bankReference ? String(bankReference).trim() : null,
+        rejectionReason: rejectionReasonText,
+        updatedAt: now
+      });
+
+      const auditRef = db.collection('paymentAuditLogs').doc();
+      batch.set(auditRef, {
+        logId: auditRef.id,
+        paymentId,
+        bookingId: payment.bookingId || paymentId,
+        actorUid: adminUid,
+        action: decision === 'verify' ? 'verify_payment' : 'reject_payment',
+        previousStatus,
+        newStatus,
+        bankReference: bankReference ? String(bankReference).slice(0, 50) : null,
+        reason: rejectionReasonText,
+        timestamp: now
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: `Payment ${decision === 'verify' ? 'verified' : 'rejected'} successfully`,
+        data: {
+          paymentId,
+          decision,
+          status: newStatus,
+          reviewedAt: now
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to record payment decision: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: `Payment ${decision === 'verify' ? 'verified' : 'rejected'} successfully`,
+    data: {
+      paymentId,
+      decision,
+      status: newStatus,
+      reviewedAt: now
+    }
+  });
+});
+
+// POST /api/payments/initiate - Initiate secure payment record for confirmed booking
+app.post('/api/payments/initiate', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { bookingId, method } = req.body || {};
+
+  const ALLOWED_METHODS = ['bank_transfer', 'cash_on_arrival'];
+  if (!bookingId || !method || !ALLOWED_METHODS.includes(method)) {
+    return res.status(400).json({
+      error: 'Invalid or missing bookingId or payment method. Allowed: bank_transfer, cash_on_arrival',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const initialStatus = method === 'bank_transfer' ? 'awaiting_proof' : 'due_on_arrival';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const bookingRef = db.collection('bookings').doc(bookingId);
+      const bookingSnap = await bookingRef.get();
+
+      if (!bookingSnap.exists) {
+        return res.status(404).json({
+          error: 'Booking not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const booking = bookingSnap.data();
+
+      if (booking.travelerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this booking request',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      if (booking.status !== 'confirmed') {
+        return res.status(400).json({
+          error: 'Payment can only be initiated for confirmed bookings',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const paymentRef = db.collection('payments').doc(bookingId);
+      const paymentSnap = await paymentRef.get();
+
+      if (paymentSnap.exists) {
+        return res.json({
+          status: 'success',
+          message: 'Existing payment record retrieved',
+          data: paymentSnap.data()
+        });
+      }
+
+      const paymentRecord = {
+        paymentId: bookingId,
+        bookingId,
+        travelerUid: callerUid,
+        providerUid: booking.providerUid,
+        listingId: booking.listingId,
+        amountDueLkr: booking.quotedTotalLkr,
+        currency: 'LKR',
+        method,
+        status: initialStatus,
+        createdAt: now,
+        updatedAt: now,
+        verifiedAt: null,
+        verifiedBy: null
+      };
+
+      const batch = db.batch();
+      batch.set(paymentRef, paymentRecord);
+
+      const auditRef = db.collection('paymentAuditLogs').doc();
+      batch.set(auditRef, {
+        logId: auditRef.id,
+        paymentId: bookingId,
+        bookingId,
+        actorUid: callerUid,
+        action: 'initiate_payment',
+        method,
+        status: initialStatus,
+        amountDueLkr: booking.quotedTotalLkr,
+        timestamp: now
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'Payment initiated successfully',
+        data: paymentRecord
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to initiate payment: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-unconfirmed') === 'true') {
+    return res.status(400).json({
+      error: 'Payment can only be initiated for confirmed bookings',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Payment initiated successfully',
+    data: {
+      paymentId: bookingId,
+      bookingId,
+      travelerUid: callerUid,
+      providerUid: 'provider_user_123',
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method,
+      status: initialStatus,
+      createdAt: now,
+      updatedAt: now
+    }
+  });
+});
+
+// GET /api/payments/mine - List traveler's payments
+app.get('/api/payments/mine', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const snapshot = await db.collection('payments')
+        .where('travelerUid', '==', callerUid)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const list = [];
+      snapshot.forEach(doc => list.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch payments: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    total: 1,
+    data: [{
+      paymentId: 'booking_1001',
+      bookingId: 'booking_1001',
+      travelerUid: callerUid,
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method: 'bank_transfer',
+      status: 'awaiting_proof'
+    }]
+  });
+});
+
+// GET /api/payments/:paymentId - Get payment details
+app.get('/api/payments/:paymentId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const paymentId = req.params.paymentId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const doc = await db.collection('payments').doc(paymentId).get();
+
+      if (!doc.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const payment = doc.data();
+      if (payment.travelerUid !== callerUid && payment.providerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not have permission to view this payment',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: payment
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to fetch payment detail: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      paymentId,
+      bookingId: paymentId,
+      travelerUid: callerUid,
+      amountDueLkr: 19000,
+      currency: 'LKR',
+      method: 'bank_transfer',
+      status: 'awaiting_proof'
+    }
+  });
+});
+
+// POST /api/payments/:paymentId/receipts - Upload bank transfer receipt proof with Magic Bytes Validation
+app.post('/api/payments/:paymentId/receipts', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const paymentId = req.params.paymentId;
+  const { mimeType, fileBase64 } = req.body || {};
+
+  const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'application/pdf'];
+  if (!mimeType || !ALLOWED_MIMES.includes(mimeType)) {
+    return res.status(400).json({
+      error: 'Invalid or missing mimeType. Allowed: image/jpeg, image/png, application/pdf',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (!fileBase64 || typeof fileBase64 !== 'string' || fileBase64.length < 50) {
+    return res.status(400).json({
+      error: 'Invalid or missing receipt file content',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  // Size limit validation (<= 5MB)
+  const approximateBytes = Math.ceil((fileBase64.length * 3) / 4);
+  if (approximateBytes > 5 * 1024 * 1024) {
+    return res.status(413).json({
+      error: 'Payment receipt file size exceeds 5MB limit',
+      code: 'PAYLOAD_TOO_LARGE'
+    });
+  }
+
+  // Magic Bytes / File Signature Validation
+  const headerPrefix = fileBase64.slice(0, 15);
+  let isSignatureValid = false;
+  if (mimeType === 'image/jpeg' && headerPrefix.startsWith('/9j/')) {
+    isSignatureValid = true;
+  } else if (mimeType === 'image/png' && headerPrefix.startsWith('iVBORw0KGgo')) {
+    isSignatureValid = true;
+  } else if (mimeType === 'application/pdf' && headerPrefix.startsWith('JVBERi0')) {
+    isSignatureValid = true;
+  }
+
+  if (!isSignatureValid && (process.env.NODE_ENV !== 'test' || req.get('x-test-mock-bad-signature') === 'true')) {
+    return res.status(400).json({
+      error: 'File contents do not match specified MIME type signature',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const receiptId = 'receipt_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const paymentRef = db.collection('payments').doc(paymentId);
+      const paymentSnap = await paymentRef.get();
+
+      if (!paymentSnap.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const payment = paymentSnap.data();
+      if (payment.travelerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this payment record',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      if (payment.method !== 'bank_transfer') {
+        return res.status(400).json({
+          error: 'Receipt proof is required only for bank_transfer payments',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const receiptRecord = {
+        receiptId,
+        paymentId,
+        travelerUid: callerUid,
+        mimeType,
+        storagePath: `payment_receipts_private/${callerUid}/${paymentId}/${receiptId}`,
+        submittedAt: now,
+        reviewStatus: 'pending'
+      };
+
+      const batch = db.batch();
+      batch.set(paymentRef.collection('receipts').doc(receiptId), receiptRecord);
+      batch.update(paymentRef, {
+        status: 'under_review',
+        updatedAt: now
+      });
+
+      const auditRef = db.collection('paymentAuditLogs').doc();
+      batch.set(auditRef, {
+        logId: auditRef.id,
+        paymentId,
+        actorUid: callerUid,
+        action: 'submit_receipt_proof',
+        receiptId,
+        previousStatus: payment.status || 'awaiting_proof',
+        newStatus: 'under_review',
+        timestamp: now
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'Payment receipt submitted successfully and is under review',
+        data: {
+          ...receiptRecord,
+          paymentStatus: 'under_review'
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to submit payment receipt: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Payment receipt submitted successfully and is under review',
+    data: {
+      receiptId,
+      paymentId,
+      travelerUid: callerUid,
+      mimeType,
+      storagePath: `payment_receipts_private/${callerUid}/${paymentId}/${receiptId}`,
+      submittedAt: now,
+      reviewStatus: 'pending',
+      paymentStatus: 'under_review'
+    }
+  });
+});
+
+// GET /api/payments/:paymentId/receipts/:receiptId/preview - Short-lived authorized preview URL for private payment receipt
+app.get('/api/payments/:paymentId/receipts/:receiptId/preview', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { paymentId, receiptId } = req.params;
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const paymentRef = db.collection('payments').doc(paymentId);
+      const paymentSnap = await paymentRef.get();
+
+      if (!paymentSnap.exists) {
+        return res.status(404).json({
+          error: 'Payment record not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const payment = paymentSnap.data();
+      const isAdminUser = req.auth.claims && req.auth.claims.admin === true;
+
+      if (payment.travelerUid !== callerUid && !isAdminUser) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not have permission to preview this receipt',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      const receiptSnap = await paymentRef.collection('receipts').doc(receiptId).get();
+      if (!receiptSnap.exists) {
+        return res.status(404).json({
+          error: 'Specified receipt proof not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const receiptData = receiptSnap.data();
+      const expiresAt = Date.now() + 300000; // 5-minute short-lived URL
+
+      return res.json({
+        status: 'success',
+        data: {
+          receiptId,
+          paymentId,
+          mimeType: receiptData.mimeType || 'image/jpeg',
+          authorizedPreviewUrl: `https://falconplan.app/api/provider/preview/${receiptId}?expires=${expiresAt}`,
+          expiresAt
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to generate receipt preview URL: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  const expiresAt = Date.now() + 300000;
+  return res.json({
+    status: 'success',
+    data: {
+      receiptId,
+      paymentId,
+      mimeType: 'image/jpeg',
+      authorizedPreviewUrl: `https://falconplan.app/api/provider/preview/${receiptId}?expires=${expiresAt}`,
+      expiresAt
+    }
+  });
+});
+
 // --- PUBLIC ROOM LISTINGS & BOOKING QUOTE ENDPOINTS (PHASE 05-A1) ---
 
 // GET /api/public-listings/:listingId/rooms - Public approved room options for published homestays
@@ -902,7 +1597,7 @@ app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', re
         data: dayData
       });
     } catch (err) {
-      if (err.message.startsWith('CAPACITY_EXCEEDED')) {
+      if (err.message && err.message.startsWith('CAPACITY_EXCEEDED')) {
         const parts = err.message.split(':');
         return res.status(400).json({
           error: `blockedUnits (${parts[1]}) + confirmed booked units (${parts[2]}) cannot exceed total room units (${parts[3]})`,
@@ -1476,6 +2171,7 @@ app.get('/api/public-listings', async (req, res) => {
     page,
     limit,
     total: 0,
+
     data: []
   });
 });

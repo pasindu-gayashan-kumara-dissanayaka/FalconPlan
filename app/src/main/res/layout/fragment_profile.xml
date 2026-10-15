@@ -131,6 +131,28 @@
                         android:text="My Homestay Bookings"
                         android:textColor="@color/primary"
                         app:cornerRadius="12dp" />
+
+                    <!-- My Payments Action Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMyPayments"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="My Booking Payments"
+                        android:textColor="@color/primary"
+                        app:cornerRadius="12dp" />
+
+                    <!-- Admin Payment Reviews Action Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAdminPaymentReviews"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="Admin Payment Reviews"
+                        android:textColor="@color/primary"
+                        app:cornerRadius="12dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

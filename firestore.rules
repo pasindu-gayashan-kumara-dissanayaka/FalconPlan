@@ -289,6 +289,23 @@ service cloud.firestore {
       allow write: if false; // Server-managed via trusted Express Backend / Admin SDK
     }
 
+    // Payments Collection: payments/{paymentId}
+    match /payments/{paymentId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.travelerUid || request.auth.uid == resource.data.providerUid);
+      allow write: if false; // Server-managed via trusted Express Backend / Admin SDK
+
+      // Payment Receipts Subcollection: payments/{paymentId}/receipts/{receiptId}
+      match /receipts/{receiptId} {
+        allow read: if isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/payments/$(paymentId)).data.travelerUid;
+        allow write: if false; // Private storage metadata managed via trusted Express Backend / Admin SDK
+      }
+    }
+
+    // Payment Audit Logs: paymentAuditLogs/{logId}
+    match /paymentAuditLogs/{logId} {
+      allow read, write: if false; // Append-only via server Admin SDK
+    }
+
     // KYC Document Records: kyc/{userId}
     match /kyc/{userId} {
       allow read, write: if false; // Deny direct client read and write; managed strictly via trusted Express Backend / Admin SDK
