@@ -437,7 +437,7 @@ app.get('/api/payments/:paymentId/receipts/:receiptId/preview', requireFirebaseU
       const payment = paymentSnap.data();
       const isAdminUser = req.auth.claims && req.auth.claims.admin === true;
 
-      if (payment.travelerUid !== callerUid && payment.providerUid !== callerUid && !isAdminUser) {
+      if (payment.travelerUid !== callerUid && !isAdminUser) {
         return res.status(403).json({
           error: 'Forbidden: You do not have permission to preview this receipt',
           code: 'FORBIDDEN'

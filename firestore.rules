@@ -296,7 +296,7 @@ service cloud.firestore {
 
       // Payment Receipts Subcollection: payments/{paymentId}/receipts/{receiptId}
       match /receipts/{receiptId} {
-        allow read: if isSignedIn() && (request.auth.uid == get(/databases/$(database)/documents/payments/$(paymentId)).data.travelerUid || request.auth.uid == get(/databases/$(database)/documents/payments/$(paymentId)).data.providerUid);
+        allow read: if isSignedIn() && request.auth.uid == get(/databases/$(database)/documents/payments/$(paymentId)).data.travelerUid;
         allow write: if false; // Private storage metadata managed via trusted Express Backend / Admin SDK
       }
     }
