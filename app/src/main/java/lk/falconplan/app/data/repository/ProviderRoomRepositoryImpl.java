@@ -4,6 +4,7 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.WriteBatch;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -111,10 +112,17 @@ public class ProviderRoomRepositoryImpl implements ProviderRoomRepository {
             return;
         }
 
-        db.collection(PROVIDER_PROFILES_COLLECTION).document(providerUid)
+        DocumentReference roomRef = db.collection(PROVIDER_PROFILES_COLLECTION).document(providerUid)
                 .collection(LISTINGS_COLLECTION).document(listingId)
-                .collection(ROOMS_COLLECTION).document(roomId)
-                .delete()
+                .collection(ROOMS_COLLECTION).document(roomId);
+
+        DocumentReference pricingRef = roomRef.collection("pricing").document("current");
+
+        WriteBatch batch = db.batch();
+        batch.delete(pricingRef);
+        batch.delete(roomRef);
+
+        batch.commit()
                 .addOnSuccessListener(aVoid -> {
                     if (callback != null) callback.onSuccess();
                 })

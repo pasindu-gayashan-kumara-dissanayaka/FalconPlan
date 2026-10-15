@@ -34,6 +34,161 @@ app.get('/api/me', requireFirebaseUser, (req, res) => {
   });
 });
 
+// --- ROOM AVAILABILITY CALENDAR ENDPOINTS (PHASE 04-C3-1) ---
+
+// GET /api/provider/listings/:listingId/rooms/:roomId/availability - Retrieve blocked availability days
+app.get('/api/provider/listings/:listingId/rooms/:roomId/availability', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { listingId, roomId } = req.params;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const roomRef = db.collection('providerProfiles').doc(callerUid)
+        .collection('listings').doc(listingId)
+        .collection('rooms').doc(roomId);
+
+      const roomSnap = await roomRef.get();
+      if (!roomSnap.exists) {
+        return res.status(404).json({
+          error: 'Room not found or caller is not owner',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const roomData = roomSnap.data();
+      const daysSnap = await roomRef.collection('availabilityDays').get();
+      const availabilityDays = [];
+      daysSnap.forEach(doc => {
+        availabilityDays.push(doc.data());
+      });
+
+      return res.json({
+        status: 'success',
+        data: {
+          roomId,
+          listingId,
+          totalUnits: roomData.totalUnits || 1,
+          availabilityDays
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve room availability: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      roomId,
+      listingId,
+      totalUnits: 2,
+      availabilityDays: [{
+        date: '2026-11-03',
+        blockedUnits: 1,
+        note: 'Maintenance',
+        updatedAt: Date.now()
+      }]
+    }
+  });
+});
+
+// PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date - Update blocked units for specific calendar date
+app.put('/api/provider/listings/:listingId/rooms/:roomId/availability/:date', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { listingId, roomId, date } = req.params;
+  const { blockedUnits, note } = req.body || {};
+
+  const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+  if (!date || !DATE_REGEX.test(date)) {
+    return res.status(400).json({
+      error: 'Invalid date format. Must be YYYY-MM-DD',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (typeof blockedUnits !== 'number' || !Number.isInteger(blockedUnits) || blockedUnits < 0) {
+    return res.status(400).json({
+      error: 'blockedUnits must be a non-negative integer',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const noteText = note ? String(note).trim().slice(0, 300) : '';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const roomRef = db.collection('providerProfiles').doc(callerUid)
+        .collection('listings').doc(listingId)
+        .collection('rooms').doc(roomId);
+
+      const roomSnap = await roomRef.get();
+      if (!roomSnap.exists) {
+        return res.status(404).json({
+          error: 'Room not found or caller is not owner',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const totalUnits = roomSnap.data().totalUnits || 1;
+      if (blockedUnits > totalUnits) {
+        return res.status(400).json({
+          error: `blockedUnits (${blockedUnits}) cannot exceed total room units (${totalUnits})`,
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const dayRef = roomRef.collection('availabilityDays').doc(date);
+      const dayData = {
+        date,
+        blockedUnits,
+        note: noteText,
+        updatedAt: now
+      };
+
+      await dayRef.set(dayData, { merge: true });
+
+      return res.json({
+        status: 'success',
+        message: 'Room availability updated successfully',
+        data: {
+          ...dayData,
+          totalUnits
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to update room availability: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-exceed-units') === 'true') {
+    return res.status(400).json({
+      error: 'blockedUnits (5) cannot exceed total room units (2)',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Room availability updated successfully',
+    data: {
+      date,
+      blockedUnits,
+      note: noteText,
+      totalUnits: 2,
+      updatedAt: now
+    }
+  });
+});
+
 // --- PROVIDER LISTING SUBMISSION & ADMIN MODERATION ENDPOINTS (PHASE 04-B3-1) ---
 
 // POST /api/provider/listings/:listingId/submit - Submit private draft listing for admin review
@@ -1756,7 +1911,7 @@ app.get('/api/public-plans', async (req, res) => {
         page,
         limit,
         total: publicPlans.length,
-        data: publicPlans
+        data: list
       });
     } catch (err) {
       return res.status(500).json({

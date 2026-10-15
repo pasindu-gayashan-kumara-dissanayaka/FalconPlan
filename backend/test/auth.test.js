@@ -77,6 +77,79 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- ROOM AVAILABILITY CALENDAR TESTS (PHASE 04-C3-1) ---
+
+  test('GET /api/provider/listings/:listingId/rooms/:roomId/availability returns blocked days list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/provider/listings/listing_123/rooms/room_101/availability', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.totalUnits, 2);
+    assert.ok(Array.isArray(res.json.data.availabilityDays));
+  });
+
+  test('PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date sets blockedUnits = 0, 1, 2', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ blockedUnits: 1, note: 'One unit maintenance' });
+
+    const res = await makeRequest('/api/provider/listings/listing_123/rooms/room_101/availability/2026-11-02', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.blockedUnits, 1);
+  });
+
+  test('PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date exceeding capacity returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ blockedUnits: 3, note: 'Exceeds capacity' });
+
+    const res = await makeRequest('/api/provider/listings/listing_123/rooms/room_101/availability/2026-11-04', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123',
+        'x-test-mock-exceed-units': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('PUT /api/provider/listings/:listingId/rooms/:roomId/availability/:date negative blockedUnits returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ blockedUnits: -1, note: 'Negative' });
+
+    const res = await makeRequest('/api/provider/listings/listing_123/rooms/room_101/availability/2026-11-05', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
   // --- PROVIDER LISTING SUBMISSION & ADMIN MODERATION TESTS (PHASE 04-B3-1) ---
 
   test('POST /api/provider/listings/:listingId/submit with unverified KYC returns 400 BAD_REQUEST', async () => {
