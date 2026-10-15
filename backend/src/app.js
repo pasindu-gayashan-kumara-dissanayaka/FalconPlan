@@ -971,6 +971,19 @@ app.delete('/api/provider/listings/:listingId/rooms/:roomId', requireFirebaseUse
         });
       }
 
+      // Check for active confirmed bookings before deleting room
+      const activeBookingsSnap = await db.collection('bookings')
+        .where('roomId', '==', roomId)
+        .where('status', '==', 'confirmed')
+        .get();
+
+      if (!activeBookingsSnap.isEmpty) {
+        return res.status(400).json({
+          error: 'Cannot delete room with active confirmed bookings',
+          code: 'BAD_REQUEST'
+        });
+      }
+
       // Fetch availability subcollection documents
       const daysSnap = await roomRef.collection('availabilityDays').get();
       const batch = db.batch();
