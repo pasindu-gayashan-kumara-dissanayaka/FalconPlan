@@ -84,6 +84,15 @@ public class ProviderDashboardFragment extends Fragment {
             }
         });
 
+        View btnBookingRequests = view.findViewById(R.id.btnBookingRequests);
+        if (btnBookingRequests != null) {
+            btnBookingRequests.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(ProviderBookingDashboardFragment.newInstance(), true);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnKycShortcut).setOnClickListener(v -> {
             if (getActivity() instanceof MainActivity) {
                 ((MainActivity) getActivity()).loadMainContentFragment(ProviderKycFragment.newInstance(), true);
