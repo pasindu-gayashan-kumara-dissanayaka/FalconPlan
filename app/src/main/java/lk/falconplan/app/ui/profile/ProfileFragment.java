@@ -82,6 +82,15 @@ public class ProfileFragment extends Fragment {
             }
         });
 
+        View btnMyBookings = view.findViewById(R.id.btnMyBookings);
+        if (btnMyBookings != null) {
+            btnMyBookings.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(lk.falconplan.app.ui.booking.MyBookingsFragment.newInstance(), true);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnSignOut).setOnClickListener(v -> {
             authViewModel.signOut();
             if (getActivity() instanceof MainActivity) {

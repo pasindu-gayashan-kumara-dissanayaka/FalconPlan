@@ -120,6 +120,17 @@
                         android:text="@string/profile_btn_edit"
                         android:textColor="@color/primary"
                         app:cornerRadius="12dp" />
+
+                    <!-- My Bookings Action Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMyBookings"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="My Homestay Bookings"
+                        android:textColor="@color/primary"
+                        app:cornerRadius="12dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
