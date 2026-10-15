@@ -283,6 +283,12 @@ service cloud.firestore {
       }
     }
 
+    // Bookings Collection: bookings/{bookingId}
+    match /bookings/{bookingId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.travelerUid || request.auth.uid == resource.data.providerUid);
+      allow write: if false; // Server-managed via trusted Express Backend / Admin SDK
+    }
+
     // KYC Document Records: kyc/{userId}
     match /kyc/{userId} {
       allow read, write: if false; // Deny direct client read and write; managed strictly via trusted Express Backend / Admin SDK

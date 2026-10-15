@@ -77,6 +77,114 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- BOOKING BACKEND & DOUBLE BOOKING PREVENTION TESTS (PHASE 05-A1) ---
+
+  test('GET /api/public-listings/:listingId/rooms returns approved room options', async () => {
+    const res = await makeRequest('/api/public-listings/listing_123/rooms');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data.rooms));
+  });
+
+  test('POST /api/bookings/quote calculates itemized LKR price quote server-side', async () => {
+    const payload = JSON.stringify({
+      listingId: 'listing_123',
+      roomId: 'room_101',
+      checkInDate: '2026-11-10',
+      checkOutDate: '2026-11-12',
+      guests: 2,
+      roomUnitsRequested: 1,
+      selectedBreakfast: true
+    });
+
+    const res = await makeRequest('/api/bookings/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.currency, 'LKR');
+    assert.equal(res.json.data.nights, 2);
+    assert.ok(res.json.data.quotedTotalLkr > 0);
+  });
+
+  test('POST /api/bookings creates pending booking request', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      listingId: 'listing_123',
+      roomId: 'room_101',
+      checkInDate: '2026-11-10',
+      checkOutDate: '2026-11-12',
+      guests: 2,
+      roomUnitsRequested: 1
+    });
+
+    const res = await makeRequest('/api/bookings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'pending');
+    assert.equal(res.json.data.travelerUid, 'traveler_user_123');
+  });
+
+  test('GET /api/bookings/mine returns traveler bookings list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/bookings/mine', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('POST /api/provider/bookings/:bookingId/decision accepts booking request', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ decision: 'accept' });
+
+    const res = await makeRequest('/api/provider/bookings/booking_1001/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'confirmed');
+  });
+
+  test('POST /api/bookings/:bookingId/cancel cancels booking request', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/bookings/booking_1001/cancel', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.status, 'cancelled');
+  });
+
   // --- ROOM AVAILABILITY CALENDAR TESTS (PHASE 04-C3-1) ---
 
   test('GET /api/provider/listings/:listingId/rooms/:roomId/availability returns blocked days list', async () => {
