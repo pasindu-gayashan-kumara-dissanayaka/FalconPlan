@@ -3,22 +3,25 @@
  * Tested with @firebase/rules-unit-testing
  */
 
+const { describe, test, before, after, beforeEach } = require('node:test');
 const { assertFails, assertSucceeds, initializeTestEnvironment } = require('@firebase/rules-unit-testing');
 const fs = require('fs');
 
 describe("FalconPlan Firestore Security Rules", () => {
   let testEnv;
 
-  beforeAll(async () => {
+  before(async () => {
     testEnv = await initializeTestEnvironment({
       projectId: "falconplan-88ad9",
       firestore: {
+        host: "localhost",
+        port: 8080,
         rules: fs.readFileSync("firestore.rules", "utf8"),
       },
     });
   });
 
-  afterAll(async () => {
+  after(async () => {
     await testEnv.cleanup();
   });
 
