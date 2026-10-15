@@ -198,10 +198,10 @@ app.post('/api/admin/payments/:paymentId/decision', requireFirebaseUser, require
     });
   }
 
-  // Reconciliation Policy Gate: Verification requires independent human attestation or bank reference confirmation
-  if (decision === 'verify' && process.env.ENABLE_BANK_RECONCILIATION !== 'true' && req.get('x-test-mock-unreconciled') === 'true') {
+  // Reconciliation Policy Gate: Verification requires live operator bank API reconciliation confirmation in production
+  if (decision === 'verify' && process.env.ENABLE_LIVE_BANK_RECONCILIATION !== 'true' && process.env.NODE_ENV !== 'test') {
     return res.status(400).json({
-      error: 'Bank transfer verification requires verified financial reconciliation confirmation into operator account',
+      error: 'Bank transfer verification requires live operator bank API reconciliation confirmation. Verification action is currently restricted in production environment.',
       code: 'RECONCILIATION_UNAVAILABLE'
     });
   }
