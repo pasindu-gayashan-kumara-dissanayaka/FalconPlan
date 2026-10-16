@@ -1645,6 +1645,252 @@ app.delete('/api/community/posts/:postId/photos/:photoId', requireFirebaseUser, 
   });
 });
 
+// --- PUBLIC COMMUNITY PROFILES ENDPOINTS (PHASE 06-C1-A) ---
+
+// GET /api/community/profile/me - Get caller's own community profile
+app.get('/api/community/profile/me', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const docRef = db.collection('communityProfiles').doc(callerUid);
+      const docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        const userSnap = await db.collection('users').doc(callerUid).get();
+        let defaultName = 'FalconPlan Member';
+        let defaultAvatar = '';
+
+        if (userSnap.exists) {
+          const u = userSnap.data();
+          defaultName = u.displayName || defaultName;
+          defaultAvatar = u.photoUrl || defaultAvatar;
+        }
+
+        const initialProfile = {
+          ownerUid: callerUid,
+          displayName: defaultName,
+          bio: '',
+          publicAvatarUrl: defaultAvatar,
+          visibility: 'private',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        await docRef.set(initialProfile);
+
+        return res.json({
+          status: 'success',
+          data: initialProfile
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: docSnap.data()
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve own community profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      ownerUid: callerUid,
+      displayName: 'FalconPlan Traveler',
+      bio: 'Travel enthusiast exploring Sri Lanka',
+      publicAvatarUrl: '',
+      visibility: 'private',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+  });
+});
+
+// PATCH /api/community/profile/me - Update caller's own community profile
+app.patch('/api/community/profile/me', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { displayName, bio, publicAvatarUrl, visibility } = req.body || {};
+
+  const nameText = displayName ? String(displayName).trim().slice(0, 50) : '';
+  const bioText = bio ? String(bio).trim().slice(0, 300) : '';
+  const visState = visibility === 'public' ? 'public' : 'private';
+
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const docRef = db.collection('communityProfiles').doc(callerUid);
+      const docSnap = await docRef.get();
+
+      const existing = docSnap.exists ? docSnap.data() : {};
+      const updatedProfile = {
+        ownerUid: callerUid,
+        displayName: nameText || existing.displayName || 'FalconPlan Member',
+        bio: bioText,
+        publicAvatarUrl: publicAvatarUrl ? String(publicAvatarUrl).trim() : (existing.publicAvatarUrl || ''),
+        visibility: visState,
+        updatedAt: now,
+        createdAt: existing.createdAt || now
+      };
+
+      await docRef.set(updatedProfile, { merge: true });
+
+      return res.json({
+        status: 'success',
+        message: 'Community profile updated successfully',
+        data: updatedProfile
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to update community profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community profile updated successfully',
+    data: {
+      ownerUid: callerUid,
+      displayName: nameText || 'FalconPlan Member',
+      bio: bioText,
+      publicAvatarUrl: publicAvatarUrl || '',
+      visibility: visState,
+      updatedAt: now
+    }
+  });
+});
+
+// GET /api/community/profiles/:profileId - Get public-safe community profile if public
+app.get('/api/community/profiles/:profileId', async (req, res) => {
+  const profileId = req.params.profileId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const docSnap = await db.collection('communityProfiles').doc(profileId).get();
+
+      if (!docSnap.exists) {
+        return res.status(404).json({
+          error: 'Public community profile not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const pData = docSnap.data();
+      if (pData.visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      // Check if user is a verified provider
+      let isVerifiedHost = false;
+      const kycSnap = await db.collection('kyc').doc(profileId).get();
+      if (kycSnap.exists && kycSnap.data().status === 'verified') {
+        isVerifiedHost = true;
+      }
+
+      return res.json({
+        status: 'success',
+        data: {
+          profileId,
+          displayName: pData.displayName || 'FalconPlan Member',
+          bio: pData.bio || '',
+          publicAvatarUrl: pData.publicAvatarUrl || '',
+          isVerifiedHost,
+          createdAt: pData.createdAt
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve public community profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      profileId,
+      displayName: 'FalconPlan Traveler',
+      bio: 'Exploring heirloom culture and nature',
+      publicAvatarUrl: '',
+      isVerifiedHost: false,
+      createdAt: Date.now()
+    }
+  });
+});
+
+// GET /api/community/profiles/:profileId/posts - Get public published posts for opted-in profile
+app.get('/api/community/profiles/:profileId/posts', async (req, res) => {
+  const profileId = req.params.profileId;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const profileSnap = await db.collection('communityProfiles').doc(profileId).get();
+
+      if (!profileSnap.exists || profileSnap.data().visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const postsSnap = await db.collection('communityPosts')
+        .where('authorUid', '==', profileId)
+        .where('status', '==', 'published')
+        .orderBy('publishedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const list = [];
+      postsSnap.forEach(doc => list.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve profile public posts: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      postId: 'post_1001',
+      authorUid: profileId,
+      caption: 'Public travel story in Sigiriya!',
+      status: 'published',
+      publishedAt: Date.now()
+    }]
+  });
+});
+
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
 // GET /api/admin/payments - Paginated list of payment records under review for admin audit

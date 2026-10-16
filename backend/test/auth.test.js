@@ -79,6 +79,64 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
   // --- COMMUNITY POSTS BACKEND TESTS (PHASE 06-A1) ---
 
+  // --- SECURE PUBLIC COMMUNITY PROFILES BACKEND TESTS (PHASE 06-C1-A) ---
+
+  test('GET /api/community/profile/me returns caller own community profile', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profile/me', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.ownerUid, 'traveler_user_123');
+  });
+
+  test('PATCH /api/community/profile/me updates community profile and visibility state', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      displayName: 'Kasun Perera',
+      bio: 'Lover of Sri Lankan nature and heritage',
+      visibility: 'public'
+    });
+
+    const res = await makeRequest('/api/community/profile/me', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.displayName, 'Kasun Perera');
+    assert.equal(res.json.data.visibility, 'public');
+  });
+
+  test('GET /api/community/profiles/:profileId returns public community profile details', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/traveler_user_123');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(res.json.data.profileId);
+  });
+
+  test('GET /api/community/profiles/:profileId/posts returns public published posts', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/traveler_user_123/posts');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
   // --- SECURE SAVED COMMUNITY POSTS BACKEND TESTS (PHASE 06-B3-1) ---
 
   test('PUT /api/community/posts/:postId/save saves published post', async () => {
