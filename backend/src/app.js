@@ -2057,6 +2057,140 @@ app.post('/api/community/profiles/:targetUid/unfollow', requireFirebaseUser, asy
   app.handle(req, res);
 });
 
+// GET /api/community/profiles/:targetUid/followers - Public followers list
+app.get('/api/community/profiles/:targetUid/followers', async (req, res) => {
+  const targetUid = req.params.targetUid;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const profileSnap = await db.collection('communityProfiles').doc(targetUid).get();
+
+      if (!profileSnap.exists || profileSnap.data().visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const followersSnap = await db.collection('communityProfiles').doc(targetUid).collection('followers')
+        .orderBy('followedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const followers = [];
+      for (const doc of followersSnap.docs) {
+        const followerUid = doc.id;
+        const followerProfileSnap = await db.collection('communityProfiles').doc(followerUid).get();
+        if (followerProfileSnap.exists && followerProfileSnap.data().visibility === 'public') {
+          followers.push({
+            profileId: followerUid,
+            displayName: followerProfileSnap.data().displayName || 'FalconPlan Member',
+            publicAvatarUrl: followerProfileSnap.data().publicAvatarUrl || '',
+            followedAt: doc.data().followedAt
+          });
+        }
+      }
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: followers.length,
+        data: followers
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve followers list: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      profileId: 'follower_101',
+      displayName: 'Saman Perera',
+      publicAvatarUrl: '',
+      followedAt: Date.now()
+    }]
+  });
+});
+
+// GET /api/community/profiles/:targetUid/following - Public following list
+app.get('/api/community/profiles/:targetUid/following', async (req, res) => {
+  const targetUid = req.params.targetUid;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const profileSnap = await db.collection('communityProfiles').doc(targetUid).get();
+
+      if (!profileSnap.exists || profileSnap.data().visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const followingSnap = await db.collection('users').doc(targetUid).collection('communityFollowing')
+        .orderBy('followedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const followingList = [];
+      for (const doc of followingSnap.docs) {
+        const followedUid = doc.id;
+        const followedProfileSnap = await db.collection('communityProfiles').doc(followedUid).get();
+        if (followedProfileSnap.exists && followedProfileSnap.data().visibility === 'public') {
+          followingList.push({
+            profileId: followedUid,
+            displayName: followedProfileSnap.data().displayName || 'FalconPlan Member',
+            publicAvatarUrl: followedProfileSnap.data().publicAvatarUrl || '',
+            followedAt: doc.data().followedAt
+          });
+        }
+      }
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: followingList.length,
+        data: followingList
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve following list: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      profileId: 'target_101',
+      displayName: 'Champa Ranasinghe',
+      publicAvatarUrl: '',
+      followedAt: Date.now()
+    }]
+  });
+});
+
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
 // GET /api/admin/payments - Paginated list of payment records under review for admin audit

@@ -125,6 +125,20 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.isFollowingByMe, false);
   });
 
+  test('GET /api/community/profiles/:targetUid/followers returns public followers list', async () => {
+    const res = await makeRequest('/api/community/profiles/target_user_456/followers');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/community/profiles/:targetUid/following returns public following list', async () => {
+    const res = await makeRequest('/api/community/profiles/target_user_456/following');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
   // --- SECURE SAVED COMMUNITY POSTS BACKEND TESTS (PHASE 06-B3-1) ---
 
   test('PUT /api/community/posts/:postId/save saves published post', async () => {
