@@ -100,6 +100,11 @@ public class MyCommunityPostsFragment extends Fragment implements CommunityPostA
     }
 
     @Override
+    public void onSaveClick(CommunityPost post) {
+        // Save active on public feed
+    }
+
+    @Override
     public void onCommentClick(CommunityPost post) {
         if (post != null && post.getPostId() != null) {
             CommunityCommentsBottomSheetFragment.newInstance(post.getPostId())

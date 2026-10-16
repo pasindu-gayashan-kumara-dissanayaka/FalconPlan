@@ -79,6 +79,52 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
   // --- COMMUNITY POSTS BACKEND TESTS (PHASE 06-A1) ---
 
+  // --- SECURE SAVED COMMUNITY POSTS BACKEND TESTS (PHASE 06-B3-1) ---
+
+  test('PUT /api/community/posts/:postId/save saves published post', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/post_1001/save', {
+      method: 'PUT',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.savedByMe, true);
+  });
+
+  test('DELETE /api/community/posts/:postId/save unsaves post', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/post_1001/save', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.savedByMe, false);
+  });
+
+  test('GET /api/community/saved-posts returns traveler saved published posts', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/saved-posts', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
   // --- SECURE COMMUNITY COMMENTS BACKEND TESTS (PHASE 06-B2-1) ---
 
   test('POST /api/community/posts/:postId/comments creates comment on published post', async () => {

@@ -26,6 +26,11 @@ public interface CommunityPostRepository {
         void onError(Exception exception);
     }
 
+    interface SaveCallback {
+        void onSuccess(boolean savedByMe);
+        void onError(Exception exception);
+    }
+
     void createPost(String idToken, String caption, String destinationId, PostCallback callback);
 
     void getTravelerPosts(String idToken, PostsListCallback callback);
@@ -43,4 +48,10 @@ public interface CommunityPostRepository {
     void likePost(String idToken, String postId, LikeCallback callback);
 
     void unlikePost(String idToken, String postId, LikeCallback callback);
+
+    void savePost(String idToken, String postId, SaveCallback callback);
+
+    void unsavePost(String idToken, String postId, SaveCallback callback);
+
+    void getSavedPosts(String idToken, int page, int limit, PostsListCallback callback);
 }

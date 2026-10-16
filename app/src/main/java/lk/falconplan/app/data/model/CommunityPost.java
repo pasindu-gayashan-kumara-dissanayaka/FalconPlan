@@ -23,6 +23,7 @@ public class CommunityPost {
     private List<String> photos;
     private int likeCount;
     private boolean likedByMe;
+    private boolean savedByMe;
     private int commentCount;
     private long createdAt;
     private long updatedAt;
@@ -98,6 +99,7 @@ public class CommunityPost {
         post.setLikeCount(json.optInt("likeCount", 0));
         post.setLikedByMe(json.optBoolean("likedByMe", false));
         post.setCommentCount(json.optInt("commentCount", 0));
+        post.setSavedByMe(json.optBoolean("savedByMe", false));
         return post;
     }
 
@@ -111,6 +113,7 @@ public class CommunityPost {
     public List<String> getPhotos() { return photos; }
     public int getLikeCount() { return likeCount; }
     public boolean isLikedByMe() { return likedByMe; }
+    public boolean isSavedByMe() { return savedByMe; }
     public int getCommentCount() { return commentCount; }
     public long getCreatedAt() { return createdAt; }
     public long getUpdatedAt() { return updatedAt; }
@@ -118,6 +121,7 @@ public class CommunityPost {
 
     public void setLikeCount(int likeCount) { this.likeCount = Math.max(0, likeCount); }
     public void setLikedByMe(boolean likedByMe) { this.likedByMe = likedByMe; }
+    public void setSavedByMe(boolean savedByMe) { this.savedByMe = savedByMe; }
     public void setCommentCount(int commentCount) { this.commentCount = Math.max(0, commentCount); }
 
     // Legacy compatibility getters
