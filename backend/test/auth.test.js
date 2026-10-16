@@ -156,6 +156,39 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.mimeType, 'image/jpeg');
   });
 
+  test('PATCH /api/community/posts/:postId updates post caption', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ caption: 'Updated caption for Ella travel story' });
+
+    const res = await makeRequest('/api/community/posts/post_1001', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.caption, 'Updated caption for Ella travel story');
+  });
+
+  test('DELETE /api/community/posts/:postId/photos/:photoId deletes individual photo', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/post_1001/photos/photo_101', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
   test('POST /api/community/posts/:postId/publish publishes community post', async () => {
     process.env.NODE_ENV = 'test';
     const res = await makeRequest('/api/community/posts/post_1001/publish', {

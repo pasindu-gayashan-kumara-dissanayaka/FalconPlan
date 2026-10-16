@@ -551,6 +551,154 @@ app.delete('/api/community/posts/:postId', requireFirebaseUser, async (req, res)
   });
 });
 
+// PATCH /api/community/posts/:postId - Author update community post caption/destination
+app.patch('/api/community/posts/:postId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const postId = req.params.postId;
+  const { caption, destinationId } = req.body || {};
+
+  const captionText = caption ? String(caption).trim() : '';
+  if (!captionText || captionText.length > 2000) {
+    return res.status(400).json({
+      error: 'Caption is required and must be between 1 and 2000 characters',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const postRef = db.collection('communityPosts').doc(postId);
+      const postSnap = await postRef.get();
+
+      if (!postSnap.exists) {
+        return res.status(404).json({
+          error: 'Community post not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const postData = postSnap.data();
+      if (postData.authorUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this community post',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      if (postData.status === 'hidden') {
+        return res.status(400).json({
+          error: 'Hidden or moderated community posts cannot be edited client-side',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const updateData = {
+        caption: captionText,
+        destinationId: destinationId ? String(destinationId).trim() : '',
+        updatedAt: now
+      };
+
+      await postRef.update(updateData);
+
+      return res.json({
+        status: 'success',
+        message: 'Community post updated successfully',
+        data: {
+          ...postData,
+          ...updateData
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to update community post: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community post updated successfully',
+    data: {
+      postId,
+      authorUid: callerUid,
+      caption: captionText,
+      destinationId: destinationId || '',
+      updatedAt: now
+    }
+  });
+});
+
+// DELETE /api/community/posts/:postId/photos/:photoId - Author delete individual photo from community post
+app.delete('/api/community/posts/:postId/photos/:photoId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { postId, photoId } = req.params;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const postRef = db.collection('communityPosts').doc(postId);
+      const postSnap = await postRef.get();
+
+      if (!postSnap.exists) {
+        return res.status(404).json({
+          error: 'Community post not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      if (postSnap.data().authorUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this community post',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      const photoRef = postRef.collection('photos').doc(photoId);
+      const photoSnap = await photoRef.get();
+
+      if (!photoSnap.exists) {
+        return res.status(404).json({
+          error: 'Photo not found in specified post',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      await photoRef.delete();
+
+      // Refresh photo array on parent post
+      const remainingSnap = await postRef.collection('photos').orderBy('orderIndex').get();
+      const updatedPhotos = [];
+      remainingSnap.forEach(doc => updatedPhotos.push(doc.data()));
+
+      await postRef.update({
+        photos: updatedPhotos,
+        updatedAt: Date.now()
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Community post photo removed successfully',
+        photoId
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to remove photo: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community post photo removed successfully',
+    photoId
+  });
+});
+
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
 // GET /api/admin/payments - Paginated list of payment records under review for admin audit
