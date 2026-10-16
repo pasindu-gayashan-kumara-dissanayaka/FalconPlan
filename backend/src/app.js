@@ -1097,12 +1097,27 @@ app.post('/api/admin/community/comments/:commentId/moderate', requireFirebaseUse
         const postRef = db.collection('communityPosts').doc(postId);
         const commentRef = postRef.collection('comments').doc(commentId);
 
+        const postSnap = await transaction.get(postRef);
+        if (!postSnap.exists) {
+          throw new Error('POST_NOT_FOUND');
+        }
+
+        if (decision === 'restore' && (postSnap.data().status === 'hidden' || postSnap.data().status === 'deleted')) {
+          throw new Error('PARENT_POST_HIDDEN');
+        }
+
         const commentSnap = await transaction.get(commentRef);
         if (!commentSnap.exists) {
           throw new Error('COMMENT_NOT_FOUND');
         }
 
         const previousStatus = commentSnap.data().status;
+
+        // Idempotency: if already in target status, return without altering counter
+        if (previousStatus === newStatus) {
+          return;
+        }
+
         transaction.update(commentRef, {
           status: newStatus,
           moderatedAt: now,
@@ -1110,19 +1125,17 @@ app.post('/api/admin/community/comments/:commentId/moderate', requireFirebaseUse
           updatedAt: now
         });
 
-        const postSnap = await transaction.get(postRef);
-        if (postSnap.exists) {
-          let currentCount = postSnap.data().commentCount || 0;
-          if (previousStatus === 'visible' && newStatus === 'hidden') {
-            currentCount = Math.max(0, currentCount - 1);
-          } else if (previousStatus === 'hidden' && newStatus === 'visible') {
-            currentCount += 1;
-          }
-          transaction.update(postRef, {
-            commentCount: currentCount,
-            updatedAt: now
-          });
+        let currentCount = postSnap.data().commentCount || 0;
+        if (previousStatus === 'visible' && newStatus === 'hidden') {
+          currentCount = Math.max(0, currentCount - 1);
+        } else if (previousStatus === 'hidden' && newStatus === 'visible') {
+          currentCount += 1;
         }
+
+        transaction.update(postRef, {
+          commentCount: currentCount,
+          updatedAt: now
+        });
       });
 
       return res.json({
@@ -1130,6 +1143,12 @@ app.post('/api/admin/community/comments/:commentId/moderate', requireFirebaseUse
         message: `Comment ${decision === 'hide' ? 'hidden' : 'restored'} successfully`
       });
     } catch (err) {
+      if (err.message === 'PARENT_POST_HIDDEN') {
+        return res.status(400).json({
+          error: 'Comments on hidden or deleted posts cannot be restored to public visibility',
+          code: 'BAD_REQUEST'
+        });
+      }
       if (err.message === 'COMMENT_NOT_FOUND') {
         return res.status(404).json({
           error: 'Comment not found',

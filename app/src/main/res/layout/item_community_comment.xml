@@ -26,6 +26,26 @@
             tools:text="Champa Ranasinghe" />
 
         <ImageButton
+            android:id="@+id/btnEditComment"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Edit Comment"
+            android:src="@drawable/ic_close"
+            android:visibility="gone"
+            app:tint="@color/primary" />
+
+        <ImageButton
+            android:id="@+id/btnDeleteComment"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Delete Comment"
+            android:src="@drawable/ic_close"
+            android:visibility="gone"
+            app:tint="@color/accent_orange" />
+
+        <ImageButton
             android:id="@+id/btnReportComment"
             android:layout_width="32dp"
             android:layout_height="32dp"

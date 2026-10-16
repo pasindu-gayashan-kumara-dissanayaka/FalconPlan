@@ -127,6 +127,76 @@ public class CommunityCommentsBottomSheetFragment extends BottomSheetDialogFragm
     }
 
     @Override
+    public void onEditClick(CommunityComment comment) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || comment == null) return;
+
+        final EditText editInput = new EditText(requireContext());
+        editInput.setText(comment.getText());
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Edit Comment")
+                .setView(editInput)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String newText = editInput.getText().toString().trim();
+                    if (newText.isEmpty()) return;
+
+                    progressBar.setVisibility(View.VISIBLE);
+                    user.getIdToken(true).addOnCompleteListener(task -> {
+                        String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+                        commentRepository.editComment(idToken, postId, comment.getCommentId(), newText, new CommunityCommentRepository.CommentCallback() {
+                            @Override
+                            public void onSuccess(CommunityComment updatedComment) {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(requireContext(), "Comment updated!", Toast.LENGTH_SHORT).show();
+                                loadComments();
+                            }
+
+                            @Override
+                            public void onError(Exception exception) {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(requireContext(), "Edit failed: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    });
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                .show();
+    }
+
+    @Override
+    public void onDeleteClick(CommunityComment comment) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || comment == null) return;
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Delete Comment")
+                .setMessage("Are you sure you want to delete this comment?")
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    progressBar.setVisibility(View.VISIBLE);
+                    user.getIdToken(true).addOnCompleteListener(task -> {
+                        String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+                        commentRepository.deleteComment(idToken, postId, comment.getCommentId(), new CommunityCommentRepository.OperationCallback() {
+                            @Override
+                            public void onSuccess() {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(requireContext(), "Comment deleted.", Toast.LENGTH_SHORT).show();
+                                loadComments();
+                            }
+
+                            @Override
+                            public void onError(Exception exception) {
+                                progressBar.setVisibility(View.GONE);
+                                Toast.makeText(requireContext(), "Delete failed: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    });
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                .show();
+    }
+
+    @Override
     public void onReportClick(CommunityComment comment) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null || comment == null) return;
