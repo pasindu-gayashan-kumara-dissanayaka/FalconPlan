@@ -71,10 +71,20 @@ service cloud.firestore {
         allow read: if true;
         allow write: if false; // Transaction-managed via trusted Express Backend / Admin SDK
       }
+
+      match /comments/{commentId} {
+        allow read: if true; // Public read access for visible comments
+        allow write: if false; // Transaction-managed via trusted Express Backend / Admin SDK
+      }
     }
 
     // Community Post Reports: communityPostReports/{reportId}
     match /communityPostReports/{reportId} {
+      allow read, write: if false; // Server-managed via trusted Express Backend / Admin SDK
+    }
+
+    // Community Comment Reports: communityCommentReports/{reportId}
+    match /communityCommentReports/{reportId} {
       allow read, write: if false; // Server-managed via trusted Express Backend / Admin SDK
     }
 
