@@ -1891,6 +1891,172 @@ app.get('/api/community/profiles/:profileId/posts', async (req, res) => {
   });
 });
 
+// --- COMMUNITY FOLLOW / UNFOLLOW ENDPOINTS (PHASE 06-C2-A) ---
+
+// PUT /api/community/profiles/:targetUid/follow - Follow public community profile
+app.put('/api/community/profiles/:targetUid/follow', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const targetUid = req.params.targetUid;
+  const now = Date.now();
+
+  if (callerUid === targetUid) {
+    return res.status(400).json({
+      error: 'You cannot follow your own community profile',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const result = await db.runTransaction(async (transaction) => {
+        const targetProfileRef = db.collection('communityProfiles').doc(targetUid);
+        const targetProfileSnap = await transaction.get(targetProfileRef);
+
+        if (!targetProfileSnap.exists || targetProfileSnap.data().visibility !== 'public') {
+          throw new Error('PROFILE_NOT_PUBLIC');
+        }
+
+        const followerDocRef = targetProfileRef.collection('followers').doc(callerUid);
+        const followerSnap = await transaction.get(followerDocRef);
+
+        const followingDocRef = db.collection('users').doc(callerUid).collection('communityFollowing').doc(targetUid);
+
+        let currentFollowersCount = targetProfileSnap.data().followersCount || 0;
+
+        if (!followerSnap.exists) {
+          currentFollowersCount += 1;
+          transaction.set(followerDocRef, {
+            followerUid: callerUid,
+            followedAt: now
+          });
+          transaction.set(followingDocRef, {
+            targetUid,
+            followedAt: now
+          });
+          transaction.update(targetProfileRef, {
+            followersCount: currentFollowersCount,
+            updatedAt: now
+          });
+
+          const userRef = db.collection('users').doc(callerUid);
+          const userSnap = await transaction.get(userRef);
+          if (userSnap.exists) {
+            const currentFollowingCount = (userSnap.data().followingCount || 0) + 1;
+            transaction.update(userRef, {
+              followingCount: currentFollowingCount,
+              updatedAt: now
+            });
+          }
+        }
+
+        return { followersCount: currentFollowersCount, isFollowingByMe: true };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Community profile followed successfully',
+        data: result
+      });
+    } catch (err) {
+      if (err.message === 'PROFILE_NOT_PUBLIC') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to follow profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community profile followed successfully',
+    data: { followersCount: 1, isFollowingByMe: true }
+  });
+});
+
+app.post('/api/community/profiles/:targetUid/follow', requireFirebaseUser, async (req, res) => {
+  req.url = `/api/community/profiles/${req.params.targetUid}/follow`;
+  req.method = 'PUT';
+  app.handle(req, res);
+});
+
+// DELETE /api/community/profiles/:targetUid/follow - Unfollow community profile
+app.delete('/api/community/profiles/:targetUid/follow', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const targetUid = req.params.targetUid;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const result = await db.runTransaction(async (transaction) => {
+        const targetProfileRef = db.collection('communityProfiles').doc(targetUid);
+        const targetProfileSnap = await transaction.get(targetProfileRef);
+
+        const followerDocRef = targetProfileRef.collection('followers').doc(callerUid);
+        const followerSnap = await transaction.get(followerDocRef);
+
+        const followingDocRef = db.collection('users').doc(callerUid).collection('communityFollowing').doc(targetUid);
+
+        let currentFollowersCount = targetProfileSnap.exists ? (targetProfileSnap.data().followersCount || 0) : 0;
+
+        if (followerSnap.exists) {
+          currentFollowersCount = Math.max(0, currentFollowersCount - 1);
+          transaction.delete(followerDocRef);
+          transaction.delete(followingDocRef);
+
+          if (targetProfileSnap.exists) {
+            transaction.update(targetProfileRef, {
+              followersCount: currentFollowersCount,
+              updatedAt: now
+            });
+          }
+
+          const userRef = db.collection('users').doc(callerUid);
+          const userSnap = await transaction.get(userRef);
+          if (userSnap.exists) {
+            const currentFollowingCount = Math.max(0, (userSnap.data().followingCount || 0) - 1);
+            transaction.update(userRef, {
+              followingCount: currentFollowingCount,
+              updatedAt: now
+            });
+          }
+        }
+
+        return { followersCount: currentFollowersCount, isFollowingByMe: false };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Community profile unfollowed successfully',
+        data: result
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to unfollow profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community profile unfollowed successfully',
+    data: { followersCount: 0, isFollowingByMe: false }
+  });
+});
+
+app.post('/api/community/profiles/:targetUid/unfollow', requireFirebaseUser, async (req, res) => {
+  req.url = `/api/community/profiles/${req.params.targetUid}/follow`;
+  req.method = 'DELETE';
+  app.handle(req, res);
+});
+
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
 // GET /api/admin/payments - Paginated list of payment records under review for admin audit
