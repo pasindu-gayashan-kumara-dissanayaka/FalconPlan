@@ -1,0 +1,144 @@
+package lk.falconplan.app.ui.community;
+
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ProgressBar;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
+import java.util.List;
+
+import lk.falconplan.app.R;
+import lk.falconplan.app.data.model.CommunityPost;
+import lk.falconplan.app.data.repository.CommunityPostRepository;
+import lk.falconplan.app.data.repository.CommunityPostRepositoryImpl;
+
+public class MySavedCommunityPostsFragment extends Fragment implements CommunityPostAdapter.OnPostActionListener {
+
+    private CommunityPostRepository communityPostRepository;
+    private CommunityPostAdapter adapter;
+
+    private RecyclerView recyclerSavedPosts;
+    private View layoutEmpty;
+    private ProgressBar progressBar;
+
+    public static MySavedCommunityPostsFragment newInstance() {
+        return new MySavedCommunityPostsFragment();
+    }
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
+        return inflater.inflate(R.layout.fragment_my_saved_community_posts, container, false);
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        communityPostRepository = new CommunityPostRepositoryImpl();
+
+        view.findViewById(R.id.btnBack).setOnClickListener(v -> requireActivity().getOnBackPressedDispatcher().onBackPressed());
+
+        recyclerSavedPosts = view.findViewById(R.id.recyclerSavedPosts);
+        layoutEmpty = view.findViewById(R.id.layoutEmpty);
+        progressBar = view.findViewById(R.id.progressBar);
+
+        recyclerSavedPosts.setLayoutManager(new LinearLayoutManager(requireContext()));
+        adapter = new CommunityPostAdapter();
+        recyclerSavedPosts.setAdapter(adapter);
+        adapter.setOnPostActionListener(this);
+
+        loadSavedPosts();
+    }
+
+    private void loadSavedPosts() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) return;
+
+        progressBar.setVisibility(View.VISIBLE);
+        user.getIdToken(true).addOnCompleteListener(task -> {
+            String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+            communityPostRepository.getSavedPosts(idToken, 1, 20, new CommunityPostRepository.PostsListCallback() {
+                @Override
+                public void onSuccess(List<CommunityPost> posts) {
+                    progressBar.setVisibility(View.GONE);
+                    adapter.setItems(posts);
+
+                    if (posts == null || posts.isEmpty()) {
+                        layoutEmpty.setVisibility(View.VISIBLE);
+                        recyclerSavedPosts.setVisibility(View.GONE);
+                    } else {
+                        layoutEmpty.setVisibility(View.GONE);
+                        recyclerSavedPosts.setVisibility(View.VISIBLE);
+                    }
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(requireContext(), "Failed to load saved posts: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+    }
+
+    @Override
+    public void onLikeClick(CommunityPost post) {
+        // Likes active on feed
+    }
+
+    @Override
+    public void onCommentClick(CommunityPost post) {
+        if (post != null && post.getPostId() != null) {
+            CommunityCommentsBottomSheetFragment.newInstance(post.getPostId())
+                    .show(getChildFragmentManager(), "saved_comments_dialog");
+        }
+    }
+
+    @Override
+    public void onSaveClick(CommunityPost post) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || post == null) return;
+
+        progressBar.setVisibility(View.VISIBLE);
+        user.getIdToken(true).addOnCompleteListener(task -> {
+            String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+            communityPostRepository.unsavePost(idToken, post.getPostId(), new CommunityPostRepository.SaveCallback() {
+                @Override
+                public void onSuccess(boolean savedByMe) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(requireContext(), "Story removed from Saved Posts.", Toast.LENGTH_SHORT).show();
+                    loadSavedPosts();
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(requireContext(), "Unsave failed: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+    }
+
+    @Override
+    public void onReportClick(CommunityPost post) {
+        Toast.makeText(requireContext(), "Post reported for review.", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onItemClick(CommunityPost post) {
+        // Optional detail view
+    }
+}

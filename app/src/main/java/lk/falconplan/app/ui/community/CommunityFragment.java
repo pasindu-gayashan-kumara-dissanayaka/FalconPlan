@@ -76,6 +76,11 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
             }
 
             @Override
+            public void onSaveClick(CommunityPost post) {
+                togglePostSave(post);
+            }
+
+            @Override
             public void onReportClick(CommunityPost post) {
                 Toast.makeText(requireContext(), "Post reported for review.", Toast.LENGTH_SHORT).show();
             }
@@ -166,6 +171,40 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
             @Override
             public void onError(Exception exception) {
                 Toast.makeText(requireContext(), "Failed to copy plan: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void togglePostSave(CommunityPost post) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(requireContext(), "Please sign in to save stories.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        CommunityPostRepository repo = new CommunityPostRepositoryImpl();
+        user.getIdToken(true).addOnCompleteListener(task -> {
+            String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+            CommunityPostRepository.SaveCallback callback = new CommunityPostRepository.SaveCallback() {
+                @Override
+                public void onSuccess(boolean savedByMe) {
+                    post.setSavedByMe(savedByMe);
+                    if (postAdapter != null) {
+                        postAdapter.notifyDataSetChanged();
+                    }
+                    Toast.makeText(requireContext(), savedByMe ? "Story Saved!" : "Story Unsaved.", Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    Toast.makeText(requireContext(), "Save failed: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                }
+            };
+
+            if (post.isSavedByMe()) {
+                repo.unsavePost(idToken, post.getPostId(), callback);
+            } else {
+                repo.savePost(idToken, post.getPostId(), callback);
             }
         });
     }

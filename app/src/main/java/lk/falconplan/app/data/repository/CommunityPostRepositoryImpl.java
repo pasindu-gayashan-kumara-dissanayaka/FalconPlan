@@ -369,4 +369,123 @@ public class CommunityPostRepositoryImpl implements CommunityPostRepository {
             }
         });
     }
+
+    @Override
+    public void savePost(String idToken, String postId, SaveCallback callback) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(BASE_URL + "community/posts/" + postId + "/save");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("PUT");
+                if (idToken != null && !idToken.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                }
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+
+                int statusCode = conn.getResponseCode();
+                if (statusCode == 200) {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        sb.append(line.trim());
+                    }
+
+                    JSONObject res = new JSONObject(sb.toString());
+                    JSONObject data = res.optJSONObject("data");
+                    boolean saved = data != null && data.optBoolean("savedByMe", true);
+
+                    mainHandler.post(() -> callback.onSuccess(saved));
+                } else {
+                    mainHandler.post(() -> callback.onError(new Exception("Save Error " + statusCode)));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> callback.onError(e));
+            }
+        });
+    }
+
+    @Override
+    public void unsavePost(String idToken, String postId, SaveCallback callback) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(BASE_URL + "community/posts/" + postId + "/save");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("DELETE");
+                if (idToken != null && !idToken.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                }
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+
+                int statusCode = conn.getResponseCode();
+                if (statusCode == 200) {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        sb.append(line.trim());
+                    }
+
+                    JSONObject res = new JSONObject(sb.toString());
+                    JSONObject data = res.optJSONObject("data");
+                    boolean saved = data != null && data.optBoolean("savedByMe", false);
+
+                    mainHandler.post(() -> callback.onSuccess(saved));
+                } else {
+                    mainHandler.post(() -> callback.onError(new Exception("Unsave Error " + statusCode)));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> callback.onError(e));
+            }
+        });
+    }
+
+    @Override
+    public void getSavedPosts(String idToken, int page, int limit, PostsListCallback callback) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(BASE_URL + "community/saved-posts?page=" + page + "&limit=" + limit);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                if (idToken != null && !idToken.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                }
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+
+                int statusCode = conn.getResponseCode();
+                if (statusCode == 200) {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        sb.append(line.trim());
+                    }
+
+                    JSONObject res = new JSONObject(sb.toString());
+                    JSONArray data = res.optJSONArray("data");
+                    List<CommunityPost> list = new ArrayList<>();
+
+                    if (data != null) {
+                        for (int i = 0; i < data.length(); i++) {
+                            JSONObject item = data.optJSONObject(i);
+                            if (item != null) {
+                                CommunityPost p = CommunityPost.fromJson(item);
+                                p.setSavedByMe(true);
+                                list.add(p);
+                            }
+                        }
+                    }
+
+                    mainHandler.post(() -> callback.onSuccess(list));
+                } else {
+                    mainHandler.post(() -> callback.onError(new Exception("Saved Posts Error " + statusCode)));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> callback.onError(e));
+            }
+        });
+    }
 }

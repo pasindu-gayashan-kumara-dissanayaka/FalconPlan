@@ -25,6 +25,7 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
     public interface OnPostActionListener {
         void onLikeClick(CommunityPost post);
         void onCommentClick(CommunityPost post);
+        void onSaveClick(CommunityPost post);
         void onReportClick(CommunityPost post);
         void onItemClick(CommunityPost post);
     }
@@ -73,6 +74,7 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
         private final TextView txtLikeCount;
         private final ImageButton btnCommentPost;
         private final TextView txtCommentCount;
+        private final ImageButton btnSavePost;
         private final Button btnReportPost;
 
         public PostViewHolder(@NonNull View itemView) {
@@ -84,6 +86,7 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
             txtLikeCount = itemView.findViewById(R.id.txtLikeCount);
             btnCommentPost = itemView.findViewById(R.id.btnCommentPost);
             txtCommentCount = itemView.findViewById(R.id.txtCommentCount);
+            btnSavePost = itemView.findViewById(R.id.btnSavePost);
             btnReportPost = itemView.findViewById(R.id.btnReportPost);
         }
 
@@ -98,6 +101,18 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
                 btnLikePost.setColorFilter(itemView.getContext().getColor(R.color.accent_orange));
             } else {
                 btnLikePost.setColorFilter(itemView.getContext().getColor(R.color.text_secondary));
+            }
+
+            if (btnSavePost != null) {
+                if (item.isSavedByMe()) {
+                    btnSavePost.setColorFilter(itemView.getContext().getColor(R.color.primary));
+                } else {
+                    btnSavePost.setColorFilter(itemView.getContext().getColor(R.color.text_secondary));
+                }
+
+                btnSavePost.setOnClickListener(v -> {
+                    if (listener != null) listener.onSaveClick(item);
+                });
             }
 
             btnLikePost.setOnClickListener(v -> {

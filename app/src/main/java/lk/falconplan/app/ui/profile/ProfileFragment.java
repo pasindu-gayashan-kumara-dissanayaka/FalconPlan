@@ -109,6 +109,15 @@ public class ProfileFragment extends Fragment {
             });
         }
 
+        View btnMySavedPosts = view.findViewById(R.id.btnMySavedPosts);
+        if (btnMySavedPosts != null) {
+            btnMySavedPosts.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(lk.falconplan.app.ui.community.MySavedCommunityPostsFragment.newInstance(), true);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnSignOut).setOnClickListener(v -> {
             authViewModel.signOut();
             if (getActivity() instanceof MainActivity) {
