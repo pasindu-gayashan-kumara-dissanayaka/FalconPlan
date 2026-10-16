@@ -23,6 +23,8 @@ import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
 import lk.falconplan.app.data.model.CommunityPost;
 import lk.falconplan.app.data.model.PublicTravelPlan;
+import lk.falconplan.app.data.repository.CommunityPostRepository;
+import lk.falconplan.app.data.repository.CommunityPostRepositoryImpl;
 import lk.falconplan.app.data.repository.TravelPlanRepository;
 import lk.falconplan.app.data.repository.TravelPlanRepositoryImpl;
 import lk.falconplan.app.ui.plans.PublicPlanAdapter;
@@ -85,9 +87,27 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
         recyclerPublicPlans.setAdapter(publicPlanAdapter);
         publicPlanAdapter.setOnPublicPlanActionListener(this);
 
-        viewModel.getPostsLiveData().observe(getViewLifecycleOwner(), posts -> postAdapter.setPosts(posts));
-
+        loadCommunityFeed();
         loadPublicPlans();
+    }
+
+    private void loadCommunityFeed() {
+        CommunityPostRepository communityPostRepository = new CommunityPostRepositoryImpl();
+        communityPostRepository.getCommunityFeed(1, 20, new CommunityPostRepository.PostsListCallback() {
+            @Override
+            public void onSuccess(List<CommunityPost> posts) {
+                if (postAdapter != null) {
+                    postAdapter.setPosts(posts);
+                }
+            }
+
+            @Override
+            public void onError(Exception exception) {
+                // Fallback to mock data if network unavailable
+                CommunityViewModel viewModel = new ViewModelProvider(CommunityFragment.this).get(CommunityViewModel.class);
+                viewModel.getPostsLiveData().observe(getViewLifecycleOwner(), posts -> postAdapter.setPosts(posts));
+            }
+        });
     }
 
     private void loadPublicPlans() {
