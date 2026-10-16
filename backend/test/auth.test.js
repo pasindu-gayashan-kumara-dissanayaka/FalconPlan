@@ -204,6 +204,29 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.isLikedByMe, true);
   });
 
+  test('POST /api/community/posts/:postId/like repeated twice is idempotent', async () => {
+    process.env.NODE_ENV = 'test';
+    const res1 = await makeRequest('/api/community/posts/post_1001/like', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    const res2 = await makeRequest('/api/community/posts/post_1001/like', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res1.status, 200);
+    assert.equal(res2.status, 200);
+    assert.equal(res1.json.data.likeCount, res2.json.data.likeCount);
+  });
+
   test('POST /api/community/posts/:postId/unlike unlikes post atomically', async () => {
     process.env.NODE_ENV = 'test';
     const res = await makeRequest('/api/community/posts/post_1001/unlike', {
@@ -217,6 +240,29 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.status, 200);
     assert.equal(res.json.status, 'success');
     assert.equal(res.json.data.isLikedByMe, false);
+  });
+
+  test('POST /api/community/posts/:postId/unlike repeated twice never results in negative likeCount', async () => {
+    process.env.NODE_ENV = 'test';
+    const res1 = await makeRequest('/api/community/posts/post_1001/unlike', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    const res2 = await makeRequest('/api/community/posts/post_1001/unlike', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res1.status, 200);
+    assert.equal(res2.status, 200);
+    assert.ok(res2.json.data.likeCount >= 0);
   });
 
   test('POST /api/community/posts/:postId/publish publishes community post', async () => {

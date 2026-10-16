@@ -76,4 +76,52 @@ public class CommunityPostTest {
         assertEquals("Meemure", post.getVillageLocation());
         assertEquals("Misty Peak Hike\n\nTrekking through Meemure trail with local guide.", post.getContentSnippet());
     }
+
+    @Test
+    public void communityPost_likeCountIncrement_updatesCountAndLikedState() {
+        CommunityPost post = new CommunityPost(
+                "post_103",
+                "user_456",
+                "Kasun Silva",
+                "",
+                "Hiking Lakegala Mountain",
+                "dest_meemure",
+                CommunityPost.STATUS_PUBLISHED,
+                new ArrayList<>(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis()
+        );
+
+        post.setLikeCount(12);
+        post.setLikedByMe(false);
+        assertEquals(12, post.getLikeCount());
+        assertFalse(post.isLikedByMe());
+
+        post.setLikeCount(post.getLikeCount() + 1);
+        post.setLikedByMe(true);
+        assertEquals(13, post.getLikeCount());
+        assertTrue(post.isLikedByMe());
+    }
+
+    @Test
+    public void communityPost_unlikeCountDecrement_preventsNegativeCount() {
+        CommunityPost post = new CommunityPost(
+                "post_104",
+                "user_456",
+                "Kasun Silva",
+                "",
+                "Sunset over Ella Gap",
+                "dest_ella",
+                CommunityPost.STATUS_PUBLISHED,
+                new ArrayList<>(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis()
+        );
+
+        post.setLikeCount(0);
+        post.setLikeCount(post.getLikeCount() - 1);
+        assertEquals(0, post.getLikeCount());
+    }
 }
