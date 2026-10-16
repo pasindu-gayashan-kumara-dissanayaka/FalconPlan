@@ -170,4 +170,56 @@ public class CommunityPostTest {
         post.setSavedByMe(false);
         assertFalse(post.isSavedByMe());
     }
+
+    @Test
+    public void communityPost_accountSwitch_resetsSavedAndLikedState() {
+        CommunityPost post = new CommunityPost(
+                "post_107",
+                "user_999",
+                "Ruwan Dissanayake",
+                "",
+                "Surfing at Arugam Bay",
+                "dest_arugambay",
+                CommunityPost.STATUS_PUBLISHED,
+                new ArrayList<>(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis()
+        );
+
+        post.setLikedByMe(true);
+        post.setSavedByMe(true);
+        assertTrue(post.isLikedByMe());
+        assertTrue(post.isSavedByMe());
+
+        // Account logout / switch
+        post.setLikedByMe(false);
+        post.setSavedByMe(false);
+
+        assertFalse(post.isLikedByMe());
+        assertFalse(post.isSavedByMe());
+    }
+
+    @Test
+    public void communityPost_commentCount_updatesCorrectly() {
+        CommunityPost post = new CommunityPost(
+                "post_108",
+                "user_999",
+                "Ruwan Dissanayake",
+                "",
+                "Exploring Jaffna Fort",
+                "dest_jaffna",
+                CommunityPost.STATUS_PUBLISHED,
+                new ArrayList<>(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis()
+        );
+
+        post.setCommentCount(5);
+        assertEquals(5, post.getCommentCount());
+
+        post.setCommentCount(post.getCommentCount() - 1);
+        assertEquals(4, post.getCommentCount());
+    }
 }
