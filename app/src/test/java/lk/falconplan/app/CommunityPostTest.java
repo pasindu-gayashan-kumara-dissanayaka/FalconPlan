@@ -124,4 +124,50 @@ public class CommunityPostTest {
         post.setLikeCount(post.getLikeCount() - 1);
         assertEquals(0, post.getLikeCount());
     }
+
+    @Test
+    public void communityPost_savedByMeState_updatesCorrectly() {
+        CommunityPost post = new CommunityPost(
+                "post_105",
+                "user_789",
+                "Nimali Fernando",
+                "",
+                "Whale watching in Mirissa",
+                "dest_mirissa",
+                CommunityPost.STATUS_PUBLISHED,
+                new ArrayList<>(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis()
+        );
+
+        post.setSavedByMe(false);
+        assertFalse(post.isSavedByMe());
+
+        post.setSavedByMe(true);
+        assertTrue(post.isSavedByMe());
+    }
+
+    @Test
+    public void communityPost_unsaveState_updatesCorrectly() {
+        CommunityPost post = new CommunityPost(
+                "post_106",
+                "user_789",
+                "Nimali Fernando",
+                "",
+                "Camping in Horton Plains",
+                "dest_horton",
+                CommunityPost.STATUS_PUBLISHED,
+                new ArrayList<>(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                System.currentTimeMillis()
+        );
+
+        post.setSavedByMe(true);
+        assertTrue(post.isSavedByMe());
+
+        post.setSavedByMe(false);
+        assertFalse(post.isSavedByMe());
+    }
 }
