@@ -21,6 +21,11 @@ public interface CommunityPostRepository {
         void onError(Exception exception);
     }
 
+    interface LikeCallback {
+        void onSuccess(int likeCount, boolean likedByMe);
+        void onError(Exception exception);
+    }
+
     void createPost(String idToken, String caption, String destinationId, PostCallback callback);
 
     void getTravelerPosts(String idToken, PostsListCallback callback);
@@ -34,4 +39,8 @@ public interface CommunityPostRepository {
     void reportPost(String idToken, String postId, String reason, OperationCallback callback);
 
     void deletePost(String idToken, String postId, OperationCallback callback);
+
+    void likePost(String idToken, String postId, LikeCallback callback);
+
+    void unlikePost(String idToken, String postId, LikeCallback callback);
 }

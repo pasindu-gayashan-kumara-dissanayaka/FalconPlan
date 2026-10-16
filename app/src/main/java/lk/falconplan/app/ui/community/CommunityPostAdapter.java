@@ -4,6 +4,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -22,6 +23,7 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
     private OnPostActionListener listener;
 
     public interface OnPostActionListener {
+        void onLikeClick(CommunityPost post);
         void onReportClick(CommunityPost post);
         void onItemClick(CommunityPost post);
     }
@@ -66,6 +68,8 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
         private final TextView txtAuthorName;
         private final TextView txtStatusBadge;
         private final TextView txtCaption;
+        private final ImageButton btnLikePost;
+        private final TextView txtLikeCount;
         private final Button btnReportPost;
 
         public PostViewHolder(@NonNull View itemView) {
@@ -73,6 +77,8 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
             txtAuthorName = itemView.findViewById(R.id.txtAuthorName);
             txtStatusBadge = itemView.findViewById(R.id.txtStatusBadge);
             txtCaption = itemView.findViewById(R.id.txtCaption);
+            btnLikePost = itemView.findViewById(R.id.btnLikePost);
+            txtLikeCount = itemView.findViewById(R.id.txtLikeCount);
             btnReportPost = itemView.findViewById(R.id.btnReportPost);
         }
 
@@ -80,6 +86,17 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
             txtAuthorName.setText(item.getAuthorDisplayName());
             txtStatusBadge.setText(item.getStatus().toUpperCase(Locale.US));
             txtCaption.setText(item.getCaption());
+            txtLikeCount.setText(String.format(Locale.US, "%d Likes", item.getLikeCount()));
+
+            if (item.isLikedByMe()) {
+                btnLikePost.setColorFilter(itemView.getContext().getColor(R.color.accent_orange));
+            } else {
+                btnLikePost.setColorFilter(itemView.getContext().getColor(R.color.text_secondary));
+            }
+
+            btnLikePost.setOnClickListener(v -> {
+                if (listener != null) listener.onLikeClick(item);
+            });
 
             btnReportPost.setOnClickListener(v -> {
                 if (listener != null) listener.onReportClick(item);

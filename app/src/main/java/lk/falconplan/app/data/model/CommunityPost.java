@@ -21,6 +21,8 @@ public class CommunityPost {
     private String destinationId;
     private String status;
     private List<String> photos;
+    private int likeCount;
+    private boolean likedByMe;
     private long createdAt;
     private long updatedAt;
     private long publishedAt;
@@ -40,6 +42,8 @@ public class CommunityPost {
         this.destinationId = destinationId != null ? destinationId : "";
         this.status = status != null ? status : STATUS_DRAFT;
         this.photos = photos != null ? photos : new ArrayList<>();
+        this.likeCount = 0;
+        this.likedByMe = false;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.publishedAt = publishedAt;
@@ -57,6 +61,8 @@ public class CommunityPost {
         this.destinationId = villageLocation;
         this.status = STATUS_PUBLISHED;
         this.photos = new ArrayList<>();
+        this.likeCount = Math.max(0, likeCount);
+        this.likedByMe = isLikedByMe;
         this.createdAt = System.currentTimeMillis();
         this.updatedAt = System.currentTimeMillis();
         this.publishedAt = System.currentTimeMillis();
@@ -75,7 +81,7 @@ public class CommunityPost {
             }
         }
 
-        return new CommunityPost(
+        CommunityPost post = new CommunityPost(
                 json.optString("postId", ""),
                 json.optString("authorUid", ""),
                 json.optString("authorDisplayName", "FalconPlan Traveler"),
@@ -88,6 +94,9 @@ public class CommunityPost {
                 json.optLong("updatedAt", System.currentTimeMillis()),
                 json.optLong("publishedAt", System.currentTimeMillis())
         );
+        post.setLikeCount(json.optInt("likeCount", 0));
+        post.setLikedByMe(json.optBoolean("likedByMe", false));
+        return post;
     }
 
     public String getPostId() { return postId; }
@@ -98,9 +107,14 @@ public class CommunityPost {
     public String getDestinationId() { return destinationId; }
     public String getStatus() { return status; }
     public List<String> getPhotos() { return photos; }
+    public int getLikeCount() { return likeCount; }
+    public boolean isLikedByMe() { return likedByMe; }
     public long getCreatedAt() { return createdAt; }
     public long getUpdatedAt() { return updatedAt; }
     public long getPublishedAt() { return publishedAt; }
+
+    public void setLikeCount(int likeCount) { this.likeCount = Math.max(0, likeCount); }
+    public void setLikedByMe(boolean likedByMe) { this.likedByMe = likedByMe; }
 
     // Legacy compatibility getters
     public String getId() { return postId; }
