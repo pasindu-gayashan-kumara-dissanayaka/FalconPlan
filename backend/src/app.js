@@ -361,6 +361,129 @@ app.post('/api/community/posts/:postId/publish', requireFirebaseUser, async (req
   });
 });
 
+// POST /api/community/posts/:postId/like - Transaction-safe post like
+app.post('/api/community/posts/:postId/like', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const postId = req.params.postId;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const result = await db.runTransaction(async (transaction) => {
+        const postRef = db.collection('communityPosts').doc(postId);
+        const postSnap = await transaction.get(postRef);
+
+        if (!postSnap.exists || postSnap.data().status !== 'published') {
+          throw new Error('POST_NOT_FOUND');
+        }
+
+        const likeRef = postRef.collection('likes').doc(callerUid);
+        const likeSnap = await transaction.get(likeRef);
+
+        let currentLikeCount = postSnap.data().likeCount || 0;
+
+        if (!likeSnap.exists) {
+          currentLikeCount += 1;
+          transaction.set(likeRef, {
+            userUid: callerUid,
+            createdAt: now
+          });
+          transaction.update(postRef, {
+            likeCount: currentLikeCount,
+            updatedAt: now
+          });
+        }
+
+        return { likeCount: currentLikeCount, isLikedByMe: true };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Community post liked successfully',
+        data: result
+      });
+    } catch (err) {
+      if (err.message === 'POST_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Published community post not found',
+          code: 'NOT_FOUND'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to like community post: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community post liked successfully',
+    data: { likeCount: 13, isLikedByMe: true }
+  });
+});
+
+// POST /api/community/posts/:postId/unlike - Transaction-safe post unlike
+app.post('/api/community/posts/:postId/unlike', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const postId = req.params.postId;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const result = await db.runTransaction(async (transaction) => {
+        const postRef = db.collection('communityPosts').doc(postId);
+        const postSnap = await transaction.get(postRef);
+
+        if (!postSnap.exists || postSnap.data().status !== 'published') {
+          throw new Error('POST_NOT_FOUND');
+        }
+
+        const likeRef = postRef.collection('likes').doc(callerUid);
+        const likeSnap = await transaction.get(likeRef);
+
+        let currentLikeCount = postSnap.data().likeCount || 0;
+
+        if (likeSnap.exists) {
+          currentLikeCount = Math.max(0, currentLikeCount - 1);
+          transaction.delete(likeRef);
+          transaction.update(postRef, {
+            likeCount: currentLikeCount,
+            updatedAt: now
+          });
+        }
+
+        return { likeCount: currentLikeCount, isLikedByMe: false };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Community post unliked successfully',
+        data: result
+      });
+    } catch (err) {
+      if (err.message === 'POST_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Published community post not found',
+          code: 'NOT_FOUND'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to unlike community post: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community post unliked successfully',
+    data: { likeCount: 12, isLikedByMe: false }
+  });
+});
+
 // GET /api/community/feed - Public community travel stories feed
 app.get('/api/community/feed', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);

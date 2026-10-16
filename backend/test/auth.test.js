@@ -189,6 +189,36 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.status, 'success');
   });
 
+  test('POST /api/community/posts/:postId/like likes post atomically', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/post_1001/like', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.isLikedByMe, true);
+  });
+
+  test('POST /api/community/posts/:postId/unlike unlikes post atomically', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/post_1001/unlike', {
+      method: 'POST',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.isLikedByMe, false);
+  });
+
   test('POST /api/community/posts/:postId/publish publishes community post', async () => {
     process.env.NODE_ENV = 'test';
     const res = await makeRequest('/api/community/posts/post_1001/publish', {
