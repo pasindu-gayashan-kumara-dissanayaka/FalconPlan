@@ -2110,6 +2110,13 @@ app.get('/api/community/profiles/:targetUid/followers', async (req, res) => {
     }
   }
 
+  if (req.get('x-test-mock-private') === 'true') {
+    return res.status(404).json({
+      error: 'Public community profile not found or is set to private',
+      code: 'NOT_FOUND'
+    });
+  }
+
   return res.json({
     status: 'success',
     page,
@@ -2175,6 +2182,13 @@ app.get('/api/community/profiles/:targetUid/following', async (req, res) => {
         code: 'INTERNAL_ERROR'
       });
     }
+  }
+
+  if (req.get('x-test-mock-private') === 'true') {
+    return res.status(404).json({
+      error: 'Public community profile not found or is set to private',
+      code: 'NOT_FOUND'
+    });
   }
 
   return res.json({

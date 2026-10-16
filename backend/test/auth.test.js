@@ -132,11 +132,35 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.ok(Array.isArray(res.json.data));
   });
 
+  test('GET /api/community/profiles/:targetUid/followers on private target returns 404 NOT_FOUND', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/private_user_999/followers', {
+      headers: {
+        'x-test-mock-private': 'true'
+      }
+    });
+
+    assert.equal(res.status, 404);
+    assert.equal(res.json.code, 'NOT_FOUND');
+  });
+
   test('GET /api/community/profiles/:targetUid/following returns public following list', async () => {
     const res = await makeRequest('/api/community/profiles/target_user_456/following');
     assert.equal(res.status, 200);
     assert.equal(res.json.status, 'success');
     assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/community/profiles/:targetUid/following on private target returns 404 NOT_FOUND', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/private_user_999/following', {
+      headers: {
+        'x-test-mock-private': 'true'
+      }
+    });
+
+    assert.equal(res.status, 404);
+    assert.equal(res.json.code, 'NOT_FOUND');
   });
 
   // --- SECURE SAVED COMMUNITY POSTS BACKEND TESTS (PHASE 06-B3-1) ---
