@@ -57,6 +57,22 @@ service cloud.firestore {
         && data.orderIndex is number && data.orderIndex >= 0;
     }
 
+    // Community Posts Collection: communityPosts/{postId}
+    match /communityPosts/{postId} {
+      allow read: if true; // Public read access for published community travel stories
+      allow write: if false; // Server-managed via trusted Express Backend / Admin SDK
+
+      match /photos/{photoId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
+    // Community Post Reports: communityPostReports/{reportId}
+    match /communityPostReports/{reportId} {
+      allow read, write: if false; // Server-managed via trusted Express Backend / Admin SDK
+    }
+
     // User Profiles: users/{userId}
     match /users/{userId} {
       allow read: if isOwner(userId);
