@@ -77,11 +77,31 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
-                android:layout_marginEnd="16dp"
+                android:layout_marginEnd="12dp"
                 android:textColor="@color/text_primary"
                 android:textSize="13sp"
                 android:textStyle="bold"
                 tools:text="12 Likes" />
+
+            <ImageButton
+                android:id="@+id/btnCommentPost"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Comments"
+                android:src="@drawable/ic_close"
+                app:tint="@color/text_secondary" />
+
+            <TextView
+                android:id="@+id/txtCommentCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="16dp"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                tools:text="2 Comments" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnReportPost"

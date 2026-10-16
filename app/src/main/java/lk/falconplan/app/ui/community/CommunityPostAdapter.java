@@ -24,6 +24,7 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
 
     public interface OnPostActionListener {
         void onLikeClick(CommunityPost post);
+        void onCommentClick(CommunityPost post);
         void onReportClick(CommunityPost post);
         void onItemClick(CommunityPost post);
     }
@@ -70,6 +71,8 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
         private final TextView txtCaption;
         private final ImageButton btnLikePost;
         private final TextView txtLikeCount;
+        private final ImageButton btnCommentPost;
+        private final TextView txtCommentCount;
         private final Button btnReportPost;
 
         public PostViewHolder(@NonNull View itemView) {
@@ -79,6 +82,8 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
             txtCaption = itemView.findViewById(R.id.txtCaption);
             btnLikePost = itemView.findViewById(R.id.btnLikePost);
             txtLikeCount = itemView.findViewById(R.id.txtLikeCount);
+            btnCommentPost = itemView.findViewById(R.id.btnCommentPost);
+            txtCommentCount = itemView.findViewById(R.id.txtCommentCount);
             btnReportPost = itemView.findViewById(R.id.btnReportPost);
         }
 
@@ -87,6 +92,7 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
             txtStatusBadge.setText(item.getStatus().toUpperCase(Locale.US));
             txtCaption.setText(item.getCaption());
             txtLikeCount.setText(String.format(Locale.US, "%d Likes", item.getLikeCount()));
+            txtCommentCount.setText(String.format(Locale.US, "%d Comments", item.getCommentCount()));
 
             if (item.isLikedByMe()) {
                 btnLikePost.setColorFilter(itemView.getContext().getColor(R.color.accent_orange));
@@ -97,6 +103,12 @@ public class CommunityPostAdapter extends RecyclerView.Adapter<CommunityPostAdap
             btnLikePost.setOnClickListener(v -> {
                 if (listener != null) listener.onLikeClick(item);
             });
+
+            View.OnClickListener commentClickListener = v -> {
+                if (listener != null) listener.onCommentClick(item);
+            };
+            btnCommentPost.setOnClickListener(commentClickListener);
+            txtCommentCount.setOnClickListener(commentClickListener);
 
             btnReportPost.setOnClickListener(v -> {
                 if (listener != null) listener.onReportClick(item);

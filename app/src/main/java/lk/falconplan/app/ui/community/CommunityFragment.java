@@ -68,6 +68,14 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
             }
 
             @Override
+            public void onCommentClick(CommunityPost post) {
+                if (post != null && post.getPostId() != null) {
+                    CommunityCommentsBottomSheetFragment.newInstance(post.getPostId())
+                            .show(getChildFragmentManager(), "comments_dialog");
+                }
+            }
+
+            @Override
             public void onReportClick(CommunityPost post) {
                 Toast.makeText(requireContext(), "Post reported for review.", Toast.LENGTH_SHORT).show();
             }
