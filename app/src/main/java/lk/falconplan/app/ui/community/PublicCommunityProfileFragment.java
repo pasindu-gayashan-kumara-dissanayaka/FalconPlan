@@ -21,6 +21,7 @@ import com.google.firebase.auth.FirebaseUser;
 import java.util.List;
 import java.util.Locale;
 
+import lk.falconplan.app.MainActivity;
 import lk.falconplan.app.R;
 import lk.falconplan.app.data.model.CommunityPost;
 import lk.falconplan.app.data.model.CommunityProfile;
@@ -80,6 +81,22 @@ public class PublicCommunityProfileFragment extends Fragment implements Communit
 
         view.findViewById(R.id.btnBack).setOnClickListener(v -> requireActivity().getOnBackPressedDispatcher().onBackPressed());
         btnFollow.setOnClickListener(v -> toggleFollow());
+
+        txtFollowersCount.setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity && profileId != null) {
+                ((MainActivity) getActivity()).loadMainContentFragment(
+                        FollowersListFragment.newInstance(profileId, FollowersListFragment.MODE_FOLLOWERS), true
+                );
+            }
+        });
+
+        txtFollowingCount.setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity && profileId != null) {
+                ((MainActivity) getActivity()).loadMainContentFragment(
+                        FollowersListFragment.newInstance(profileId, FollowersListFragment.MODE_FOLLOWING), true
+                );
+            }
+        });
 
         recyclerProfilePosts.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new CommunityPostAdapter();

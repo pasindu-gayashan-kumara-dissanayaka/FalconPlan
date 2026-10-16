@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="@color/surface"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="1dp"
+    app:strokeColor="@color/border_subtle"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/txtDisplayName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/primary_dark"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Saman Perera" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnViewProfile"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="View Profile"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            app:cornerRadius="10dp" />
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
