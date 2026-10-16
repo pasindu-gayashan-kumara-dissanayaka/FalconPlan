@@ -728,6 +728,446 @@ app.post('/api/community/posts/:postId/unlike', requireFirebaseUser, async (req,
   });
 });
 
+// --- COMMUNITY COMMENTS ENDPOINTS (PHASE 06-B2-1) ---
+
+// POST /api/community/posts/:postId/comments - Create comment on published post
+app.post('/api/community/posts/:postId/comments', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const postId = req.params.postId;
+  const { text } = req.body || {};
+
+  const commentText = text ? String(text).trim() : '';
+  if (!commentText || commentText.length > 1000) {
+    return res.status(400).json({
+      error: 'Comment text is required and must be between 1 and 1000 characters',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const commentId = 'comment_' + now + '_' + Math.floor(Math.random() * 1000);
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const result = await db.runTransaction(async (transaction) => {
+        const postRef = db.collection('communityPosts').doc(postId);
+        const postSnap = await transaction.get(postRef);
+
+        if (!postSnap.exists || postSnap.data().status !== 'published') {
+          throw new Error('POST_NOT_FOUND');
+        }
+
+        const userSnap = await transaction.get(db.collection('users').doc(callerUid));
+        let authorDisplayName = 'FalconPlan Member';
+        let authorPhotoUrl = '';
+
+        if (userSnap.exists) {
+          const u = userSnap.data();
+          authorDisplayName = u.displayName || authorDisplayName;
+          authorPhotoUrl = u.photoUrl || authorPhotoUrl;
+        }
+
+        const commentRef = postRef.collection('comments').doc(commentId);
+        const commentRecord = {
+          commentId,
+          postId,
+          authorUid: callerUid,
+          authorDisplayName,
+          authorPhotoUrl,
+          text: commentText,
+          status: 'visible',
+          createdAt: now,
+          updatedAt: now
+        };
+
+        transaction.set(commentRef, commentRecord);
+
+        const currentCommentCount = (postSnap.data().commentCount || 0) + 1;
+        transaction.update(postRef, {
+          commentCount: currentCommentCount,
+          updatedAt: now
+        });
+
+        return commentRecord;
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Comment created successfully',
+        data: result
+      });
+    } catch (err) {
+      if (err.message === 'POST_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Published community post not found',
+          code: 'NOT_FOUND'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to create comment: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Comment created successfully',
+    data: {
+      commentId,
+      postId,
+      authorUid: callerUid,
+      authorDisplayName: 'FalconPlan Traveler',
+      text: commentText,
+      status: 'visible',
+      createdAt: now,
+      updatedAt: now
+    }
+  });
+});
+
+// GET /api/community/posts/:postId/comments - Get public visible comments on post
+app.get('/api/community/posts/:postId/comments', async (req, res) => {
+  const postId = req.params.postId;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const snapshot = await db.collection('communityPosts').doc(postId).collection('comments')
+        .where('status', '==', 'visible')
+        .orderBy('createdAt', 'asc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const comments = [];
+      snapshot.forEach(doc => comments.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: comments.length,
+        data: comments
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve comments: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      commentId: 'comment_101',
+      postId,
+      authorUid: 'user_123',
+      authorDisplayName: 'Champa Ranasinghe',
+      text: 'Wonderful travel story! Sigiriya is breathtaking.',
+      status: 'visible',
+      createdAt: Date.now()
+    }]
+  });
+});
+
+// PATCH /api/community/posts/:postId/comments/:commentId - Author edit own comment
+app.patch('/api/community/posts/:postId/comments/:commentId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { postId, commentId } = req.params;
+  const { text } = req.body || {};
+
+  const commentText = text ? String(text).trim() : '';
+  if (!commentText || commentText.length > 1000) {
+    return res.status(400).json({
+      error: 'Comment text is required and must be between 1 and 1000 characters',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const commentRef = db.collection('communityPosts').doc(postId).collection('comments').doc(commentId);
+      const commentSnap = await commentRef.get();
+
+      if (!commentSnap.exists) {
+        return res.status(404).json({
+          error: 'Comment not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const commentData = commentSnap.data();
+      if (commentData.authorUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this comment',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      if (commentData.status === 'hidden') {
+        return res.status(400).json({
+          error: 'Hidden or moderated comments cannot be edited client-side',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      await commentRef.update({
+        text: commentText,
+        updatedAt: now
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Comment updated successfully',
+        data: {
+          ...commentData,
+          text: commentText,
+          updatedAt: now
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to update comment: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Comment updated successfully',
+    data: {
+      commentId,
+      postId,
+      authorUid: callerUid,
+      text: commentText,
+      updatedAt: now
+    }
+  });
+});
+
+// DELETE /api/community/posts/:postId/comments/:commentId - Author delete own comment
+app.delete('/api/community/posts/:postId/comments/:commentId', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { postId, commentId } = req.params;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      await db.runTransaction(async (transaction) => {
+        const postRef = db.collection('communityPosts').doc(postId);
+        const commentRef = postRef.collection('comments').doc(commentId);
+
+        const commentSnap = await transaction.get(commentRef);
+        if (!commentSnap.exists) {
+          throw new Error('COMMENT_NOT_FOUND');
+        }
+
+        const commentData = commentSnap.data();
+        if (commentData.authorUid !== callerUid) {
+          throw new Error('FORBIDDEN');
+        }
+
+        if (commentData.status === 'visible') {
+          transaction.update(commentRef, {
+            status: 'deleted',
+            updatedAt: now
+          });
+
+          const postSnap = await transaction.get(postRef);
+          if (postSnap.exists) {
+            const currentCount = Math.max(0, (postSnap.data().commentCount || 0) - 1);
+            transaction.update(postRef, {
+              commentCount: currentCount,
+              updatedAt: now
+            });
+          }
+        }
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Comment deleted successfully'
+      });
+    } catch (err) {
+      if (err.message === 'COMMENT_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Comment not found',
+          code: 'NOT_FOUND'
+        });
+      }
+      if (err.message === 'FORBIDDEN') {
+        return res.status(403).json({
+          error: 'Forbidden: You do not own this comment',
+          code: 'FORBIDDEN'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to delete comment: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Comment deleted successfully'
+  });
+});
+
+// POST /api/community/posts/:postId/comments/:commentId/report - Report inappropriate comment
+app.post('/api/community/posts/:postId/comments/:commentId/report', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { postId, commentId } = req.params;
+  const { reason } = req.body || {};
+
+  if (!reason || typeof reason !== 'string' || !reason.trim()) {
+    return res.status(400).json({
+      error: 'Report reason is required',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const reportId = 'c_report_' + now;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      await db.collection('communityCommentReports').doc(reportId).set({
+        reportId,
+        postId,
+        commentId,
+        reporterUid: callerUid,
+        reason: String(reason).trim().slice(0, 300),
+        status: 'pending',
+        createdAt: now
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Comment reported for review'
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to report comment: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Comment reported for review'
+  });
+});
+
+// POST /api/admin/community/comments/:commentId/moderate - Admin moderate comment
+app.post('/api/admin/community/comments/:commentId/moderate', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const commentId = req.params.commentId;
+  const { postId, decision, reason } = req.body || {};
+
+  const ALLOWED_DECISIONS = ['hide', 'restore'];
+  if (!postId || !decision || !ALLOWED_DECISIONS.includes(decision)) {
+    return res.status(400).json({
+      error: 'Missing or invalid parameters. Requires postId and decision ("hide" or "restore")',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const newStatus = decision === 'hide' ? 'hidden' : 'visible';
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      await db.runTransaction(async (transaction) => {
+        const postRef = db.collection('communityPosts').doc(postId);
+        const commentRef = postRef.collection('comments').doc(commentId);
+
+        const postSnap = await transaction.get(postRef);
+        if (!postSnap.exists) {
+          throw new Error('POST_NOT_FOUND');
+        }
+
+        if (decision === 'restore' && (postSnap.data().status === 'hidden' || postSnap.data().status === 'deleted')) {
+          throw new Error('PARENT_POST_HIDDEN');
+        }
+
+        const commentSnap = await transaction.get(commentRef);
+        if (!commentSnap.exists) {
+          throw new Error('COMMENT_NOT_FOUND');
+        }
+
+        const previousStatus = commentSnap.data().status;
+
+        // Idempotency: if already in target status, return without altering counter
+        if (previousStatus === newStatus) {
+          return;
+        }
+
+        transaction.update(commentRef, {
+          status: newStatus,
+          moderatedAt: now,
+          moderationReason: reason ? String(reason).trim().slice(0, 300) : '',
+          updatedAt: now
+        });
+
+        let currentCount = postSnap.data().commentCount || 0;
+        if (previousStatus === 'visible' && newStatus === 'hidden') {
+          currentCount = Math.max(0, currentCount - 1);
+        } else if (previousStatus === 'hidden' && newStatus === 'visible') {
+          currentCount += 1;
+        }
+
+        transaction.update(postRef, {
+          commentCount: currentCount,
+          updatedAt: now
+        });
+      });
+
+      return res.json({
+        status: 'success',
+        message: `Comment ${decision === 'hide' ? 'hidden' : 'restored'} successfully`
+      });
+    } catch (err) {
+      if (err.message === 'PARENT_POST_HIDDEN') {
+        return res.status(400).json({
+          error: 'Comments on hidden or deleted posts cannot be restored to public visibility',
+          code: 'BAD_REQUEST'
+        });
+      }
+      if (err.message === 'COMMENT_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Comment not found',
+          code: 'NOT_FOUND'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to moderate comment: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: `Comment ${decision === 'hide' ? 'hidden' : 'restored'} successfully`
+  });
+});
+
 // GET /api/community/feed - Public community travel stories feed
 app.get('/api/community/feed', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);

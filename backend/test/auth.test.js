@@ -79,6 +79,104 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
   // --- COMMUNITY POSTS BACKEND TESTS (PHASE 06-A1) ---
 
+  // --- SECURE COMMUNITY COMMENTS BACKEND TESTS (PHASE 06-B2-1) ---
+
+  test('POST /api/community/posts/:postId/comments creates comment on published post', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ text: 'Amazing travel story! Sigiriya is breathtaking.' });
+
+    const res = await makeRequest('/api/community/posts/post_1001/comments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.text, 'Amazing travel story! Sigiriya is breathtaking.');
+  });
+
+  test('POST /api/community/posts/:postId/comments with empty text returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ text: '   ' });
+
+    const res = await makeRequest('/api/community/posts/post_1001/comments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('GET /api/community/posts/:postId/comments returns public visible comments list', async () => {
+    const res = await makeRequest('/api/community/posts/post_1001/comments');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('PATCH /api/community/posts/:postId/comments/:commentId updates author comment', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ text: 'Updated comment text for travel story.' });
+
+    const res = await makeRequest('/api/community/posts/post_1001/comments/comment_101', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.text, 'Updated comment text for travel story.');
+  });
+
+  test('DELETE /api/community/posts/:postId/comments/:commentId deletes author comment', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/posts/post_1001/comments/comment_101', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('POST /api/admin/community/comments/:commentId/moderate hides comment with admin claims', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ postId: 'post_1001', decision: 'hide', reason: 'Inappropriate language' });
+
+    const res = await makeRequest('/api/admin/community/comments/comment_101/moderate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
   test('POST /api/community/posts creates draft community post', async () => {
     process.env.NODE_ENV = 'test';
     const payload = JSON.stringify({
