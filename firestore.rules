@@ -66,6 +66,11 @@ service cloud.firestore {
         allow read: if true;
         allow write: if false;
       }
+
+      match /likes/{userUid} {
+        allow read: if true;
+        allow write: if false; // Transaction-managed via trusted Express Backend / Admin SDK
+      }
     }
 
     // Community Post Reports: communityPostReports/{reportId}

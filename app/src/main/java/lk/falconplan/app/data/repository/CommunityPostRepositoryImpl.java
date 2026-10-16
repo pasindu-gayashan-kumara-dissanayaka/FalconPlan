@@ -295,4 +295,78 @@ public class CommunityPostRepositoryImpl implements CommunityPostRepository {
             }
         });
     }
+
+    @Override
+    public void likePost(String idToken, String postId, LikeCallback callback) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(BASE_URL + "community/posts/" + postId + "/like");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("PUT");
+                if (idToken != null && !idToken.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                }
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+
+                int statusCode = conn.getResponseCode();
+                if (statusCode == 200) {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        sb.append(line.trim());
+                    }
+
+                    JSONObject res = new JSONObject(sb.toString());
+                    JSONObject data = res.optJSONObject("data");
+                    int count = data != null ? data.optInt("likeCount", 0) : 0;
+                    boolean liked = data != null && data.optBoolean("likedByMe", true);
+
+                    mainHandler.post(() -> callback.onSuccess(count, liked));
+                } else {
+                    mainHandler.post(() -> callback.onError(new Exception("Like Error " + statusCode)));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> callback.onError(e));
+            }
+        });
+    }
+
+    @Override
+    public void unlikePost(String idToken, String postId, LikeCallback callback) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(BASE_URL + "community/posts/" + postId + "/like");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("DELETE");
+                if (idToken != null && !idToken.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                }
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+
+                int statusCode = conn.getResponseCode();
+                if (statusCode == 200) {
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        sb.append(line.trim());
+                    }
+
+                    JSONObject res = new JSONObject(sb.toString());
+                    JSONObject data = res.optJSONObject("data");
+                    int count = data != null ? data.optInt("likeCount", 0) : 0;
+                    boolean liked = data != null && data.optBoolean("likedByMe", false);
+
+                    mainHandler.post(() -> callback.onSuccess(count, liked));
+                } else {
+                    mainHandler.post(() -> callback.onError(new Exception("Unlike Error " + statusCode)));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> callback.onError(e));
+            }
+        });
+    }
 }

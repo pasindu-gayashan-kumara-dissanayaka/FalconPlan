@@ -95,6 +95,11 @@ public class MyCommunityPostsFragment extends Fragment implements CommunityPostA
     }
 
     @Override
+    public void onLikeClick(CommunityPost post) {
+        // Likes active on public feed
+    }
+
+    @Override
     public void onReportClick(CommunityPost post) {
         Toast.makeText(requireContext(), "Post reported for review.", Toast.LENGTH_SHORT).show();
     }

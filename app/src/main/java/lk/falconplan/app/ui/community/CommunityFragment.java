@@ -63,6 +63,11 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
         recyclerPosts.setAdapter(postAdapter);
         postAdapter.setOnPostActionListener(new CommunityPostAdapter.OnPostActionListener() {
             @Override
+            public void onLikeClick(CommunityPost post) {
+                togglePostLike(post);
+            }
+
+            @Override
             public void onReportClick(CommunityPost post) {
                 Toast.makeText(requireContext(), "Post reported for review.", Toast.LENGTH_SHORT).show();
             }
@@ -153,6 +158,40 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
             @Override
             public void onError(Exception exception) {
                 Toast.makeText(requireContext(), "Failed to copy plan: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void togglePostLike(CommunityPost post) {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null) {
+            Toast.makeText(requireContext(), "Please sign in to like travel stories.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        CommunityPostRepository repo = new CommunityPostRepositoryImpl();
+        user.getIdToken(true).addOnCompleteListener(task -> {
+            String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+            CommunityPostRepository.LikeCallback callback = new CommunityPostRepository.LikeCallback() {
+                @Override
+                public void onSuccess(int likeCount, boolean likedByMe) {
+                    post.setLikeCount(likeCount);
+                    post.setLikedByMe(likedByMe);
+                    if (postAdapter != null) {
+                        postAdapter.notifyDataSetChanged();
+                    }
+                }
+
+                @Override
+                public void onError(Exception exception) {
+                    Toast.makeText(requireContext(), "Failed to update like: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                }
+            };
+
+            if (post.isLikedByMe()) {
+                repo.unlikePost(idToken, post.getPostId(), callback);
+            } else {
+                repo.likePost(idToken, post.getPostId(), callback);
             }
         });
     }
