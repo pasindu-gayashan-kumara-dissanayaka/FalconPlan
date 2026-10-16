@@ -164,6 +164,17 @@
                         android:text="My Saved Community Stories"
                         android:textColor="@color/primary"
                         app:cornerRadius="12dp" />
+
+                    <!-- My Community Profile Action Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMyCommunityProfile"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="My Public Community Profile"
+                        android:textColor="@color/primary"
+                        app:cornerRadius="12dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

@@ -87,7 +87,13 @@ public class CommunityFragment extends Fragment implements PublicPlanAdapter.OnP
 
             @Override
             public void onItemClick(CommunityPost post) {
-                showPostDetailDialog(post);
+                if (getActivity() instanceof MainActivity && post != null && post.getAuthorUid() != null && !post.getAuthorUid().isEmpty()) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(
+                            PublicCommunityProfileFragment.newInstance(post.getAuthorUid()), true
+                    );
+                } else {
+                    showPostDetailDialog(post);
+                }
             }
         });
 
