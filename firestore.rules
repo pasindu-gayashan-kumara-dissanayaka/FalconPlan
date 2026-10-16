@@ -119,6 +119,12 @@ service cloud.firestore {
           && request.resource.data.note is string;
       }
 
+      // Saved Community Posts Subcollection: users/{userId}/savedCommunityPosts/{postId}
+      match /savedCommunityPosts/{postId} {
+        allow read: if isOwner(userId);
+        allow write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+
       // Travel Plans Subcollection: users/{userId}/travelPlans/{planId}
       match /travelPlans/{planId} {
         allow read, delete: if isOwner(userId);

@@ -728,6 +728,145 @@ app.post('/api/community/posts/:postId/unlike', requireFirebaseUser, async (req,
   });
 });
 
+// --- SAVED COMMUNITY POSTS ENDPOINTS (PHASE 06-B3-1) ---
+
+// PUT /api/community/posts/:postId/save - Save community post for authenticated traveler
+app.put('/api/community/posts/:postId/save', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const postId = req.params.postId;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const postRef = db.collection('communityPosts').doc(postId);
+      const postSnap = await postRef.get();
+
+      if (!postSnap.exists || postSnap.data().status !== 'published') {
+        return res.status(404).json({
+          error: 'Published community post not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const saveRef = db.collection('users').doc(callerUid).collection('savedCommunityPosts').doc(postId);
+      const saveSnap = await saveRef.get();
+
+      if (!saveSnap.exists) {
+        await saveRef.set({
+          postId,
+          savedAt: now
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        message: 'Community post saved successfully',
+        data: { postId, savedByMe: true }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to save community post: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community post saved successfully',
+    data: { postId, savedByMe: true }
+  });
+});
+
+// DELETE /api/community/posts/:postId/save - Unsave community post
+app.delete('/api/community/posts/:postId/save', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const postId = req.params.postId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const saveRef = db.collection('users').doc(callerUid).collection('savedCommunityPosts').doc(postId);
+      await saveRef.delete();
+
+      return res.json({
+        status: 'success',
+        message: 'Community post unsaved successfully',
+        data: { postId, savedByMe: false }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to unsave community post: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community post unsaved successfully',
+    data: { postId, savedByMe: false }
+  });
+});
+
+// GET /api/community/saved-posts - Retrieve traveler's saved published posts
+app.get('/api/community/saved-posts', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const savedSnap = await db.collection('users').doc(callerUid).collection('savedCommunityPosts')
+        .orderBy('savedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const savedPosts = [];
+      for (const doc of savedSnap.docs) {
+        const postId = doc.id;
+        const postSnap = await db.collection('communityPosts').doc(postId).get();
+        if (postSnap.exists && postSnap.data().status === 'published') {
+          savedPosts.push({
+            ...postSnap.data(),
+            savedByMe: true
+          });
+        }
+      }
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: savedPosts.length,
+        data: savedPosts
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve saved community posts: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      postId: 'post_1001',
+      authorUid: 'user_123',
+      caption: 'Saved travel story in Ella!',
+      status: 'published',
+      savedByMe: true
+    }]
+  });
+});
+
 // --- COMMUNITY COMMENTS ENDPOINTS (PHASE 06-B2-1) ---
 
 // POST /api/community/posts/:postId/comments - Create comment on published post
