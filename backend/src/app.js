@@ -2581,6 +2581,174 @@ app.post('/api/chat/conversations/:conversationId/report', requireFirebaseUser, 
   });
 });
 
+// --- NOTIFICATION ENDPOINTS (PHASE 08-A1) ---
+
+// Helper function to create notification record
+async function createNotificationRecord(db, recipientUid, notifData) {
+  if (!recipientUid || !notifData) return;
+  const now = Date.now();
+  const notificationId = 'notif_' + now + '_' + Math.floor(Math.random() * 1000);
+
+  const notifRecord = {
+    notificationId,
+    recipientUid,
+    type: notifData.type || 'system_event',
+    sourceEventId: notifData.sourceEventId || '',
+    entityType: notifData.entityType || '',
+    entityId: notifData.entityId || '',
+    title: notifData.title || 'FalconPlan Update',
+    body: notifData.body || '',
+    isRead: false,
+    createdAt: now,
+    readAt: null
+  };
+
+  await db.collection('users').doc(recipientUid).collection('notifications').doc(notificationId).set(notifRecord);
+  return notifRecord;
+}
+
+// GET /api/notifications/mine - Get caller's in-app notifications
+app.get('/api/notifications/mine', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const notifsSnap = await db.collection('users').doc(callerUid).collection('notifications')
+        .orderBy('createdAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const notifs = [];
+      let unreadCount = 0;
+
+      notifsSnap.forEach(doc => {
+        const data = doc.data();
+        if (!data.isRead) unreadCount++;
+        notifs.push(data);
+      });
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        unreadCount,
+        total: notifs.length,
+        data: notifs
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve notifications: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    unreadCount: 1,
+    total: 1,
+    data: [{
+      notificationId: 'notif_1001',
+      recipientUid: callerUid,
+      type: 'booking_created',
+      title: 'New Booking Request',
+      body: 'A traveler requested a homestay booking.',
+      isRead: false,
+      createdAt: Date.now()
+    }]
+  });
+});
+
+// PATCH /api/notifications/:notificationId/read - Mark notification as read
+app.patch('/api/notifications/:notificationId/read', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const notificationId = req.params.notificationId;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const notifRef = db.collection('users').doc(callerUid).collection('notifications').doc(notificationId);
+      const docSnap = await notifRef.get();
+
+      if (!docSnap.exists) {
+        return res.status(404).json({
+          error: 'Notification not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      await notifRef.update({
+        isRead: true,
+        readAt: now
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Notification marked as read'
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to update notification: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Notification marked as read'
+  });
+});
+
+// PATCH /api/notifications/mark-all-read - Mark all caller's notifications as read
+app.patch('/api/notifications/mark-all-read', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const notifsSnap = await db.collection('users').doc(callerUid).collection('notifications')
+        .where('isRead', '==', false)
+        .get();
+
+      const batch = db.batch();
+      notifsSnap.forEach(doc => {
+        batch.update(doc.ref, {
+          isRead: true,
+          readAt: now
+        });
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'All notifications marked as read',
+        count: notifsSnap.size
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to mark notifications read: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'All notifications marked as read',
+    count: 1
+  });
+});
+
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
 // GET /api/admin/payments - Paginated list of payment records under review for admin audit

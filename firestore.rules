@@ -152,6 +152,12 @@ service cloud.firestore {
         allow write: if false; // Managed strictly via Express Backend / Admin SDK
       }
 
+      // Notifications Subcollection: users/{userId}/notifications/{notificationId}
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+
       // Community Following Subcollection: users/{userId}/communityFollowing/{targetUid}
       match /communityFollowing/{targetUid} {
         allow read: if isOwner(userId);

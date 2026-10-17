@@ -77,6 +77,50 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- SECURE USER NOTIFICATIONS BACKEND TESTS (PHASE 08-A1) ---
+
+  test('GET /api/notifications/mine returns caller in-app notifications', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/mine', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('PATCH /api/notifications/:notificationId/read marks notification as read', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/notif_1001/read', {
+      method: 'PATCH',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('PATCH /api/notifications/mark-all-read marks all notifications as read', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/mark-all-read', {
+      method: 'PATCH',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
   // --- SECURE BOOKING-LINKED CHAT BACKEND TESTS (PHASE 07-A1) ---
 
   test('POST /api/chat/conversations/initiate initiates booking chat', async () => {
