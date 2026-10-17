@@ -2,6 +2,7 @@
 
 const express = require('express');
 const helmet = require('helmet');
+const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { requireFirebaseUser, requireAdmin, requireRole } = require('./auth');
 
@@ -2635,12 +2636,13 @@ app.post('/api/notifications/fcm-token', requireFirebaseUser, async (req, res) =
   }
 
   const tokenStr = fcmToken.trim();
+  const tokenHash = crypto.createHash('sha256').update(tokenStr).digest('hex');
   const now = Date.now();
 
   if (admin.apps.length) {
     try {
       const db = admin.firestore();
-      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenStr.slice(0, 100));
+      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenHash);
       await tokenRef.set({
         fcmToken: tokenStr,
         deviceType: deviceType ? String(deviceType).trim() : 'android',
@@ -2673,17 +2675,18 @@ app.delete('/api/notifications/fcm-token', requireFirebaseUser, async (req, res)
 
   if (!fcmTokenVal || typeof fcmTokenVal !== 'string' || !fcmTokenVal.trim()) {
     return res.status(400).json({
-      error: 'Valid fcmToken string is required',
+      error: 'Valid fcmToken string is required in request body or query parameter',
       code: 'BAD_REQUEST'
     });
   }
 
   const tokenStr = fcmTokenVal.trim();
+  const tokenHash = crypto.createHash('sha256').update(tokenStr).digest('hex');
 
   if (admin.apps.length) {
     try {
       const db = admin.firestore();
-      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenStr.slice(0, 100));
+      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenHash);
       await tokenRef.delete();
 
       return res.json({
