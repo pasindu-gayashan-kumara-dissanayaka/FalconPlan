@@ -77,6 +77,54 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- SECURE HOMESTAY REVIEWS & RATINGS BACKEND TESTS (PHASE 09-A1) ---
+
+  test('GET /api/reviews/eligibility checks caller review eligibility for a booking', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/reviews/eligibility?bookingId=booking_1001', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(typeof res.json.eligible, 'boolean');
+  });
+
+  test('POST /api/reviews submits a booking-verified homestay review & rating', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({
+      bookingId: 'booking_1001',
+      rating: 5,
+      reviewText: 'Wonderful stay at Knuckles Eco Homestay!'
+    });
+
+    const res = await makeRequest('/api/reviews', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.rating, 5);
+  });
+
+  test('GET /api/public-listings/:listingId/reviews returns public verified reviews', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/public-listings/listing_knuckles_101/reviews');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
   // --- SECURE USER NOTIFICATIONS BACKEND TESTS (PHASE 08-A1) ---
 
   test('POST /api/notifications/fcm-token registers FCM device token', async () => {

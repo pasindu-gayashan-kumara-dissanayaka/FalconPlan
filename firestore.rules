@@ -73,6 +73,17 @@ service cloud.firestore {
       allow read, write: if false; // Server-managed via trusted Express Backend / Admin SDK
     }
 
+    // Homestay Listings Collection: homestayListings/{listingId}
+    match /homestayListings/{listingId} {
+      allow read: if true; // Public listings & ratings read
+      allow write: if false; // Server-managed via Express Backend / Admin SDK
+
+      match /reviews/{reviewId} {
+        allow read: if true; // Public verified reviews read
+        allow write: if false; // Server-managed via Express Backend / Admin SDK
+      }
+    }
+
     // Community Profiles Collection: communityProfiles/{uid}
     match /communityProfiles/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid; // Own profile direct read

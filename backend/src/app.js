@@ -2582,6 +2582,251 @@ app.post('/api/chat/conversations/:conversationId/report', requireFirebaseUser, 
   });
 });
 
+// --- SECURE HOMESTAY REVIEWS & RATINGS ENDPOINTS (PHASE 09-A1) ---
+
+// GET /api/reviews/eligibility - Check caller's review eligibility for a booking
+app.get('/api/reviews/eligibility', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const bookingId = req.query.bookingId;
+
+  if (!bookingId || typeof bookingId !== 'string') {
+    return res.status(400).json({
+      error: 'Valid bookingId query parameter is required',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const bookingSnap = await db.collection('bookings').doc(bookingId).get();
+
+      if (!bookingSnap.exists) {
+        return res.status(404).json({
+          error: 'Booking not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const booking = bookingSnap.data();
+      if (booking.travelerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You are not the traveler for this booking',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      const listingId = booking.listingId;
+      const reviewSnap = await db.collection('homestayListings').doc(listingId)
+        .collection('reviews').doc(bookingId).get();
+
+      const reviewed = reviewSnap.exists;
+      const eligible = (booking.status === 'confirmed' || booking.status === 'completed') && !reviewed;
+
+      return res.json({
+        status: 'success',
+        eligible,
+        reviewed,
+        listingId,
+        bookingStatus: booking.status
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to check review eligibility: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    eligible: true,
+    reviewed: false,
+    listingId: 'listing_knuckles_101',
+    bookingStatus: 'confirmed'
+  });
+});
+
+// POST /api/reviews - Submit a booking-verified homestay review & rating
+app.post('/api/reviews', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { bookingId, rating, reviewText } = req.body || {};
+
+  if (!bookingId || typeof bookingId !== 'string') {
+    return res.status(400).json({
+      error: 'Valid bookingId string is required',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const ratingVal = parseInt(rating, 10);
+  if (isNaN(ratingVal) || ratingVal < 1 || ratingVal > 5) {
+    return res.status(400).json({
+      error: 'Rating must be an integer between 1 and 5',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const commentStr = reviewText ? String(reviewText).trim().slice(0, 1000) : '';
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+
+      const bookingSnap = await db.collection('bookings').doc(bookingId).get();
+      if (!bookingSnap.exists) {
+        return res.status(404).json({
+          error: 'Booking not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const booking = bookingSnap.data();
+      if (booking.travelerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You are not the traveler for this booking',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      if (booking.status !== 'confirmed' && booking.status !== 'completed') {
+        return res.status(400).json({
+          error: 'Reviews can only be submitted for confirmed or completed bookings',
+          code: 'BAD_REQUEST'
+        });
+      }
+
+      const listingId = booking.listingId;
+      const listingRef = db.collection('homestayListings').doc(listingId);
+      const reviewRef = listingRef.collection('reviews').doc(bookingId);
+
+      let createdReview = null;
+
+      await db.runTransaction(async (transaction) => {
+        const reviewSnap = await transaction.get(reviewRef);
+        if (reviewSnap.exists) {
+          throw new Error('ALREADY_REVIEWED');
+        }
+
+        const listingSnap = await transaction.get(listingRef);
+        const lData = listingSnap.exists ? listingSnap.data() : {};
+
+        const currentCount = parseInt(lData.ratingCount, 10) || 0;
+        const currentSum = parseInt(lData.ratingSum, 10) || 0;
+
+        const newCount = currentCount + 1;
+        const newSum = currentSum + ratingVal;
+        const newAvg = Math.round((newSum / newCount) * 10) / 10;
+
+        createdReview = {
+          reviewId: bookingId,
+          listingId,
+          bookingId,
+          travelerUid: callerUid,
+          providerUid: booking.providerUid || '',
+          rating: ratingVal,
+          reviewText: commentStr,
+          status: 'published',
+          createdAt: now,
+          updatedAt: now
+        };
+
+        transaction.set(reviewRef, createdReview);
+        transaction.set(listingRef, {
+          ratingCount: newCount,
+          ratingSum: newSum,
+          averageRating: newAvg
+        }, { merge: true });
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Review submitted successfully',
+        data: createdReview
+      });
+    } catch (err) {
+      if (err.message === 'ALREADY_REVIEWED') {
+        return res.status(400).json({
+          error: 'You have already submitted a review for this booking',
+          code: 'ALREADY_REVIEWED'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to submit review: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Review submitted successfully',
+    data: {
+      reviewId: bookingId,
+      listingId: 'listing_knuckles_101',
+      bookingId,
+      travelerUid: callerUid,
+      rating: ratingVal,
+      reviewText: commentStr,
+      status: 'published',
+      createdAt: now
+    }
+  });
+});
+
+// GET /api/public-listings/:listingId/reviews - Get public verified reviews for homestay listing
+app.get('/api/public-listings/:listingId/reviews', async (req, res) => {
+  const listingId = req.params.listingId;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const reviewsSnap = await db.collection('homestayListings').doc(listingId).collection('reviews')
+        .where('status', '==', 'published')
+        .orderBy('createdAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const reviews = [];
+      reviewsSnap.forEach(doc => reviews.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: reviews.length,
+        data: reviews
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve listing reviews: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      reviewId: 'review_1001',
+      listingId,
+      bookingId: 'booking_1001',
+      travelerUid: 'traveler_user_123',
+      rating: 5,
+      reviewText: 'Wonderful stay at Knuckles Eco Homestay!',
+      status: 'published',
+      createdAt: Date.now()
+    }]
+  });
+});
+
 // --- NOTIFICATION ENDPOINTS (PHASE 08-A1) ---
 
 // Helper function to create notification record
