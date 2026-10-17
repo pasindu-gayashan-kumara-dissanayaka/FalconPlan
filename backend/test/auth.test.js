@@ -79,6 +79,20 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
   // --- SECURE USER NOTIFICATIONS BACKEND TESTS (PHASE 08-A1) ---
 
+  test('GET /api/notifications/unread-count returns caller unread notification count', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/unread-count', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(typeof res.json.unreadCount, 'number');
+  });
+
   test('GET /api/notifications/mine returns caller in-app notifications', async () => {
     process.env.NODE_ENV = 'test';
     const res = await makeRequest('/api/notifications/mine', {

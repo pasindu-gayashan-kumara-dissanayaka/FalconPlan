@@ -2587,13 +2587,28 @@ app.post('/api/chat/conversations/:conversationId/report', requireFirebaseUser, 
 async function createNotificationRecord(db, recipientUid, notifData) {
   if (!recipientUid || !notifData) return;
   const now = Date.now();
+  const sourceEventId = notifData.sourceEventId ? String(notifData.sourceEventId).trim() : '';
+
+  // Deduplication check: verify if a notification for the same source event & type already exists
+  if (sourceEventId) {
+    const existingSnap = await db.collection('users').doc(recipientUid).collection('notifications')
+      .where('sourceEventId', '==', sourceEventId)
+      .where('type', '==', notifData.type || 'system_event')
+      .limit(1)
+      .get();
+
+    if (!existingSnap.empty) {
+      return existingSnap.docs[0].data();
+    }
+  }
+
   const notificationId = 'notif_' + now + '_' + Math.floor(Math.random() * 1000);
 
   const notifRecord = {
     notificationId,
     recipientUid,
     type: notifData.type || 'system_event',
-    sourceEventId: notifData.sourceEventId || '',
+    sourceEventId,
     entityType: notifData.entityType || '',
     entityId: notifData.entityId || '',
     title: notifData.title || 'FalconPlan Update',
@@ -2606,6 +2621,35 @@ async function createNotificationRecord(db, recipientUid, notifData) {
   await db.collection('users').doc(recipientUid).collection('notifications').doc(notificationId).set(notifRecord);
   return notifRecord;
 }
+
+// GET /api/notifications/unread-count - Get caller's authoritative unread notification count
+app.get('/api/notifications/unread-count', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const unreadSnap = await db.collection('users').doc(callerUid).collection('notifications')
+        .where('isRead', '==', false)
+        .get();
+
+      return res.json({
+        status: 'success',
+        unreadCount: unreadSnap.size
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve unread notification count: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    unreadCount: 1
+  });
+});
 
 // GET /api/notifications/mine - Get caller's in-app notifications
 app.get('/api/notifications/mine', requireFirebaseUser, async (req, res) => {
