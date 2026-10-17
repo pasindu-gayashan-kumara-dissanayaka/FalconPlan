@@ -2621,12 +2621,15 @@ app.get('/api/reviews/eligibility', requireFirebaseUser, async (req, res) => {
         .collection('reviews').doc(bookingId).get();
 
       const reviewed = reviewSnap.exists;
-      const eligible = (booking.status === 'confirmed' || booking.status === 'completed') && !reviewed;
+      const checkOutTime = booking.checkOutDate ? new Date(booking.checkOutDate).getTime() : 0;
+      const stayCompleted = (booking.status === 'completed') || (booking.status === 'confirmed' && (checkOutTime === 0 || Date.now() >= checkOutTime));
+      const eligible = stayCompleted && !reviewed;
 
       return res.json({
         status: 'success',
         eligible,
         reviewed,
+        stayCompleted,
         listingId,
         bookingStatus: booking.status
       });
@@ -2694,6 +2697,14 @@ app.post('/api/reviews', requireFirebaseUser, async (req, res) => {
         return res.status(400).json({
           error: 'Reviews can only be submitted for confirmed or completed bookings',
           code: 'BAD_REQUEST'
+        });
+      }
+
+      const checkOutTime = booking.checkOutDate ? new Date(booking.checkOutDate).getTime() : 0;
+      if (booking.status === 'confirmed' && checkOutTime > 0 && Date.now() < checkOutTime) {
+        return res.status(400).json({
+          error: 'Reviews can only be submitted after check-out date has passed',
+          code: 'STAY_NOT_COMPLETED'
         });
       }
 
