@@ -24,6 +24,7 @@ public class BookingAdapter extends RecyclerView.Adapter<BookingAdapter.BookingV
     public interface OnBookingActionListener {
         void onViewDetailClick(Booking booking);
         void onCancelClick(Booking booking);
+        void onChatClick(Booking booking);
     }
 
     public void setOnBookingActionListener(OnBookingActionListener listener) {
@@ -65,6 +66,7 @@ public class BookingAdapter extends RecyclerView.Adapter<BookingAdapter.BookingV
         private final TextView txtBookingTotal;
         private final Button btnViewDetail;
         private final Button btnCancelBooking;
+        private final Button btnChatHost;
 
         public BookingViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -74,6 +76,7 @@ public class BookingAdapter extends RecyclerView.Adapter<BookingAdapter.BookingV
             txtBookingTotal = itemView.findViewById(R.id.txtBookingTotal);
             btnViewDetail = itemView.findViewById(R.id.btnViewDetail);
             btnCancelBooking = itemView.findViewById(R.id.btnCancelBooking);
+            btnChatHost = itemView.findViewById(R.id.btnChatHost);
         }
 
         public void bind(Booking item, OnBookingActionListener listener) {
@@ -98,6 +101,12 @@ public class BookingAdapter extends RecyclerView.Adapter<BookingAdapter.BookingV
             btnCancelBooking.setOnClickListener(v -> {
                 if (listener != null) listener.onCancelClick(item);
             });
+
+            if (btnChatHost != null) {
+                btnChatHost.setOnClickListener(v -> {
+                    if (listener != null) listener.onChatClick(item);
+                });
+            }
         }
     }
 }
