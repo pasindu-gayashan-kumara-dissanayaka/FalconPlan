@@ -21,6 +21,9 @@ import lk.falconplan.app.R;
 import lk.falconplan.app.data.model.Booking;
 import lk.falconplan.app.data.repository.BookingRepository;
 import lk.falconplan.app.data.repository.BookingRepositoryImpl;
+import lk.falconplan.app.data.repository.ReviewRepository;
+import lk.falconplan.app.data.repository.ReviewRepositoryImpl;
+import lk.falconplan.app.ui.reviews.WriteHomestayReviewFragment;
 
 public class BookingDetailFragment extends Fragment {
 
@@ -122,6 +125,37 @@ public class BookingDetailFragment extends Fragment {
             } else {
                 btnProceedPayment.setVisibility(View.GONE);
             }
+        }
+
+        View btnWriteReview = getView() != null ? getView().findViewById(R.id.btnWriteReview) : null;
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (btnWriteReview != null && user != null) {
+            user.getIdToken(true).addOnCompleteListener(task -> {
+                String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
+                ReviewRepository reviewRepo = new ReviewRepositoryImpl();
+                reviewRepo.checkEligibility(idToken, booking.getBookingId(), new ReviewRepository.EligibilityCallback() {
+                    @Override
+                    public void onSuccess(boolean eligible, boolean reviewed, String listingId) {
+                        if (eligible) {
+                            btnWriteReview.setVisibility(View.VISIBLE);
+                            btnWriteReview.setOnClickListener(v -> {
+                                if (getActivity() instanceof MainActivity) {
+                                    ((MainActivity) getActivity()).loadMainContentFragment(
+                                            WriteHomestayReviewFragment.newInstance(booking.getBookingId()), true
+                                    );
+                                }
+                            });
+                        } else {
+                            btnWriteReview.setVisibility(View.GONE);
+                        }
+                    }
+
+                    @Override
+                    public void onError(Exception exception) {
+                        btnWriteReview.setVisibility(View.GONE);
+                    }
+                });
+            });
         }
     }
 
