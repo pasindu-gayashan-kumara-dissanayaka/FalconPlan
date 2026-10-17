@@ -57,6 +57,17 @@ service cloud.firestore {
         && data.orderIndex is number && data.orderIndex >= 0;
     }
 
+    // Community Profiles Collection: communityProfiles/{uid}
+    match /communityProfiles/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid; // Own profile direct read
+      allow write: if false; // Managed strictly via Express Backend / Admin SDK
+
+      match /followers/{followerUid} {
+        allow read: if true; // Public read access
+        allow write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+    }
+
     // Community Posts Collection: communityPosts/{postId}
     match /communityPosts/{postId} {
       allow read: if true; // Public read access for published community travel stories
@@ -121,6 +132,12 @@ service cloud.firestore {
 
       // Saved Community Posts Subcollection: users/{userId}/savedCommunityPosts/{postId}
       match /savedCommunityPosts/{postId} {
+        allow read: if isOwner(userId);
+        allow write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+
+      // Community Following Subcollection: users/{userId}/communityFollowing/{targetUid}
+      match /communityFollowing/{targetUid} {
         allow read: if isOwner(userId);
         allow write: if false; // Managed strictly via Express Backend / Admin SDK
       }

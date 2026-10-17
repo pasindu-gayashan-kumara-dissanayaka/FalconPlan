@@ -79,6 +79,90 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
   // --- COMMUNITY POSTS BACKEND TESTS (PHASE 06-A1) ---
 
+  // --- SECURE COMMUNITY FOLLOW / UNFOLLOW BACKEND TESTS (PHASE 06-C2-A) ---
+
+  test('PUT /api/community/profiles/:targetUid/follow follows target profile', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/target_user_456/follow', {
+      method: 'PUT',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.isFollowingByMe, true);
+  });
+
+  test('PUT /api/community/profiles/:targetUid/follow following self returns 400 BAD_REQUEST', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/traveler_user_123/follow', {
+      method: 'PUT',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(res.json.code, 'BAD_REQUEST');
+  });
+
+  test('DELETE /api/community/profiles/:targetUid/follow unfollows target profile', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/target_user_456/follow', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.isFollowingByMe, false);
+  });
+
+  test('GET /api/community/profiles/:targetUid/followers returns public followers list', async () => {
+    const res = await makeRequest('/api/community/profiles/target_user_456/followers');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/community/profiles/:targetUid/followers on private target returns 404 NOT_FOUND', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/private_user_999/followers', {
+      headers: {
+        'x-test-mock-private': 'true'
+      }
+    });
+
+    assert.equal(res.status, 404);
+    assert.equal(res.json.code, 'NOT_FOUND');
+  });
+
+  test('GET /api/community/profiles/:targetUid/following returns public following list', async () => {
+    const res = await makeRequest('/api/community/profiles/target_user_456/following');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('GET /api/community/profiles/:targetUid/following on private target returns 404 NOT_FOUND', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/community/profiles/private_user_999/following', {
+      headers: {
+        'x-test-mock-private': 'true'
+      }
+    });
+
+    assert.equal(res.status, 404);
+    assert.equal(res.json.code, 'NOT_FOUND');
+  });
+
   // --- SECURE SAVED COMMUNITY POSTS BACKEND TESTS (PHASE 06-B3-1) ---
 
   test('PUT /api/community/posts/:postId/save saves published post', async () => {

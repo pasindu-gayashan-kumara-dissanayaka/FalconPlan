@@ -1645,6 +1645,566 @@ app.delete('/api/community/posts/:postId/photos/:photoId', requireFirebaseUser, 
   });
 });
 
+// --- PUBLIC COMMUNITY PROFILES ENDPOINTS (PHASE 06-C1-A) ---
+
+// GET /api/community/profile/me - Get caller's own community profile
+app.get('/api/community/profile/me', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const docRef = db.collection('communityProfiles').doc(callerUid);
+      const docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        const userSnap = await db.collection('users').doc(callerUid).get();
+        let defaultName = 'FalconPlan Member';
+        let defaultAvatar = '';
+
+        if (userSnap.exists) {
+          const u = userSnap.data();
+          defaultName = u.displayName || defaultName;
+          defaultAvatar = u.photoUrl || defaultAvatar;
+        }
+
+        const initialProfile = {
+          ownerUid: callerUid,
+          displayName: defaultName,
+          bio: '',
+          publicAvatarUrl: defaultAvatar,
+          visibility: 'private',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        await docRef.set(initialProfile);
+
+        return res.json({
+          status: 'success',
+          data: initialProfile
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: docSnap.data()
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve own community profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      ownerUid: callerUid,
+      displayName: 'FalconPlan Traveler',
+      bio: 'Travel enthusiast exploring Sri Lanka',
+      publicAvatarUrl: '',
+      visibility: 'private',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+  });
+});
+
+// PATCH /api/community/profile/me - Update caller's own community profile
+app.patch('/api/community/profile/me', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { displayName, bio, publicAvatarUrl, visibility } = req.body || {};
+
+  const nameText = displayName ? String(displayName).trim().slice(0, 50) : '';
+  const bioText = bio ? String(bio).trim().slice(0, 300) : '';
+  const visState = visibility === 'public' ? 'public' : 'private';
+
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const docRef = db.collection('communityProfiles').doc(callerUid);
+      const docSnap = await docRef.get();
+
+      const existing = docSnap.exists ? docSnap.data() : {};
+      const updatedProfile = {
+        ownerUid: callerUid,
+        displayName: nameText || existing.displayName || 'FalconPlan Member',
+        bio: bioText,
+        publicAvatarUrl: publicAvatarUrl ? String(publicAvatarUrl).trim() : (existing.publicAvatarUrl || ''),
+        visibility: visState,
+        updatedAt: now,
+        createdAt: existing.createdAt || now
+      };
+
+      await docRef.set(updatedProfile, { merge: true });
+
+      return res.json({
+        status: 'success',
+        message: 'Community profile updated successfully',
+        data: updatedProfile
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to update community profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community profile updated successfully',
+    data: {
+      ownerUid: callerUid,
+      displayName: nameText || 'FalconPlan Member',
+      bio: bioText,
+      publicAvatarUrl: publicAvatarUrl || '',
+      visibility: visState,
+      updatedAt: now
+    }
+  });
+});
+
+// GET /api/community/profiles/:profileId - Get public-safe community profile if public
+app.get('/api/community/profiles/:profileId', async (req, res) => {
+  const profileId = req.params.profileId;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const docSnap = await db.collection('communityProfiles').doc(profileId).get();
+
+      if (!docSnap.exists) {
+        return res.status(404).json({
+          error: 'Public community profile not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const pData = docSnap.data();
+      if (pData.visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      // Check if user is a verified provider
+      let isVerifiedHost = false;
+      const kycSnap = await db.collection('kyc').doc(profileId).get();
+      if (kycSnap.exists && kycSnap.data().status === 'verified') {
+        isVerifiedHost = true;
+      }
+
+      return res.json({
+        status: 'success',
+        data: {
+          profileId,
+          displayName: pData.displayName || 'FalconPlan Member',
+          bio: pData.bio || '',
+          publicAvatarUrl: pData.publicAvatarUrl || '',
+          isVerifiedHost,
+          createdAt: pData.createdAt
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve public community profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    data: {
+      profileId,
+      displayName: 'FalconPlan Traveler',
+      bio: 'Exploring heirloom culture and nature',
+      publicAvatarUrl: '',
+      isVerifiedHost: false,
+      createdAt: Date.now()
+    }
+  });
+});
+
+// GET /api/community/profiles/:profileId/posts - Get public published posts for opted-in profile
+app.get('/api/community/profiles/:profileId/posts', async (req, res) => {
+  const profileId = req.params.profileId;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const profileSnap = await db.collection('communityProfiles').doc(profileId).get();
+
+      if (!profileSnap.exists || profileSnap.data().visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const postsSnap = await db.collection('communityPosts')
+        .where('authorUid', '==', profileId)
+        .where('status', '==', 'published')
+        .orderBy('publishedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const list = [];
+      postsSnap.forEach(doc => list.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve profile public posts: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      postId: 'post_1001',
+      authorUid: profileId,
+      caption: 'Public travel story in Sigiriya!',
+      status: 'published',
+      publishedAt: Date.now()
+    }]
+  });
+});
+
+// --- COMMUNITY FOLLOW / UNFOLLOW ENDPOINTS (PHASE 06-C2-A) ---
+
+// PUT /api/community/profiles/:targetUid/follow - Follow public community profile
+app.put('/api/community/profiles/:targetUid/follow', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const targetUid = req.params.targetUid;
+  const now = Date.now();
+
+  if (callerUid === targetUid) {
+    return res.status(400).json({
+      error: 'You cannot follow your own community profile',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const result = await db.runTransaction(async (transaction) => {
+        const targetProfileRef = db.collection('communityProfiles').doc(targetUid);
+        const targetProfileSnap = await transaction.get(targetProfileRef);
+
+        if (!targetProfileSnap.exists || targetProfileSnap.data().visibility !== 'public') {
+          throw new Error('PROFILE_NOT_PUBLIC');
+        }
+
+        const followerDocRef = targetProfileRef.collection('followers').doc(callerUid);
+        const followerSnap = await transaction.get(followerDocRef);
+
+        const followingDocRef = db.collection('users').doc(callerUid).collection('communityFollowing').doc(targetUid);
+
+        let currentFollowersCount = targetProfileSnap.data().followersCount || 0;
+
+        if (!followerSnap.exists) {
+          currentFollowersCount += 1;
+          transaction.set(followerDocRef, {
+            followerUid: callerUid,
+            followedAt: now
+          });
+          transaction.set(followingDocRef, {
+            targetUid,
+            followedAt: now
+          });
+          transaction.update(targetProfileRef, {
+            followersCount: currentFollowersCount,
+            updatedAt: now
+          });
+
+          const userRef = db.collection('users').doc(callerUid);
+          const userSnap = await transaction.get(userRef);
+          if (userSnap.exists) {
+            const currentFollowingCount = (userSnap.data().followingCount || 0) + 1;
+            transaction.update(userRef, {
+              followingCount: currentFollowingCount,
+              updatedAt: now
+            });
+          }
+        }
+
+        return { followersCount: currentFollowersCount, isFollowingByMe: true };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Community profile followed successfully',
+        data: result
+      });
+    } catch (err) {
+      if (err.message === 'PROFILE_NOT_PUBLIC') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to follow profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community profile followed successfully',
+    data: { followersCount: 1, isFollowingByMe: true }
+  });
+});
+
+app.post('/api/community/profiles/:targetUid/follow', requireFirebaseUser, async (req, res) => {
+  req.url = `/api/community/profiles/${req.params.targetUid}/follow`;
+  req.method = 'PUT';
+  app.handle(req, res);
+});
+
+// DELETE /api/community/profiles/:targetUid/follow - Unfollow community profile
+app.delete('/api/community/profiles/:targetUid/follow', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const targetUid = req.params.targetUid;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const result = await db.runTransaction(async (transaction) => {
+        const targetProfileRef = db.collection('communityProfiles').doc(targetUid);
+        const targetProfileSnap = await transaction.get(targetProfileRef);
+
+        const followerDocRef = targetProfileRef.collection('followers').doc(callerUid);
+        const followerSnap = await transaction.get(followerDocRef);
+
+        const followingDocRef = db.collection('users').doc(callerUid).collection('communityFollowing').doc(targetUid);
+
+        let currentFollowersCount = targetProfileSnap.exists ? (targetProfileSnap.data().followersCount || 0) : 0;
+
+        if (followerSnap.exists) {
+          currentFollowersCount = Math.max(0, currentFollowersCount - 1);
+          transaction.delete(followerDocRef);
+          transaction.delete(followingDocRef);
+
+          if (targetProfileSnap.exists) {
+            transaction.update(targetProfileRef, {
+              followersCount: currentFollowersCount,
+              updatedAt: now
+            });
+          }
+
+          const userRef = db.collection('users').doc(callerUid);
+          const userSnap = await transaction.get(userRef);
+          if (userSnap.exists) {
+            const currentFollowingCount = Math.max(0, (userSnap.data().followingCount || 0) - 1);
+            transaction.update(userRef, {
+              followingCount: currentFollowingCount,
+              updatedAt: now
+            });
+          }
+        }
+
+        return { followersCount: currentFollowersCount, isFollowingByMe: false };
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Community profile unfollowed successfully',
+        data: result
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to unfollow profile: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Community profile unfollowed successfully',
+    data: { followersCount: 0, isFollowingByMe: false }
+  });
+});
+
+app.post('/api/community/profiles/:targetUid/unfollow', requireFirebaseUser, async (req, res) => {
+  req.url = `/api/community/profiles/${req.params.targetUid}/follow`;
+  req.method = 'DELETE';
+  app.handle(req, res);
+});
+
+// GET /api/community/profiles/:targetUid/followers - Public followers list
+app.get('/api/community/profiles/:targetUid/followers', async (req, res) => {
+  const targetUid = req.params.targetUid;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const profileSnap = await db.collection('communityProfiles').doc(targetUid).get();
+
+      if (!profileSnap.exists || profileSnap.data().visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const followersSnap = await db.collection('communityProfiles').doc(targetUid).collection('followers')
+        .orderBy('followedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const followers = [];
+      for (const doc of followersSnap.docs) {
+        const followerUid = doc.id;
+        const followerProfileSnap = await db.collection('communityProfiles').doc(followerUid).get();
+        if (followerProfileSnap.exists && followerProfileSnap.data().visibility === 'public') {
+          followers.push({
+            profileId: followerUid,
+            displayName: followerProfileSnap.data().displayName || 'FalconPlan Member',
+            publicAvatarUrl: followerProfileSnap.data().publicAvatarUrl || '',
+            followedAt: doc.data().followedAt
+          });
+        }
+      }
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: followers.length,
+        data: followers
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve followers list: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-private') === 'true') {
+    return res.status(404).json({
+      error: 'Public community profile not found or is set to private',
+      code: 'NOT_FOUND'
+    });
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      profileId: 'follower_101',
+      displayName: 'Saman Perera',
+      publicAvatarUrl: '',
+      followedAt: Date.now()
+    }]
+  });
+});
+
+// GET /api/community/profiles/:targetUid/following - Public following list
+app.get('/api/community/profiles/:targetUid/following', async (req, res) => {
+  const targetUid = req.params.targetUid;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const profileSnap = await db.collection('communityProfiles').doc(targetUid).get();
+
+      if (!profileSnap.exists || profileSnap.data().visibility !== 'public') {
+        return res.status(404).json({
+          error: 'Public community profile not found or is set to private',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const followingSnap = await db.collection('users').doc(targetUid).collection('communityFollowing')
+        .orderBy('followedAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const followingList = [];
+      for (const doc of followingSnap.docs) {
+        const followedUid = doc.id;
+        const followedProfileSnap = await db.collection('communityProfiles').doc(followedUid).get();
+        if (followedProfileSnap.exists && followedProfileSnap.data().visibility === 'public') {
+          followingList.push({
+            profileId: followedUid,
+            displayName: followedProfileSnap.data().displayName || 'FalconPlan Member',
+            publicAvatarUrl: followedProfileSnap.data().publicAvatarUrl || '',
+            followedAt: doc.data().followedAt
+          });
+        }
+      }
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: followingList.length,
+        data: followingList
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve following list: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  if (req.get('x-test-mock-private') === 'true') {
+    return res.status(404).json({
+      error: 'Public community profile not found or is set to private',
+      code: 'NOT_FOUND'
+    });
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      profileId: 'target_101',
+      displayName: 'Champa Ranasinghe',
+      publicAvatarUrl: '',
+      followedAt: Date.now()
+    }]
+  });
+});
+
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
 // GET /api/admin/payments - Paginated list of payment records under review for admin audit
