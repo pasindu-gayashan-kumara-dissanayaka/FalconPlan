@@ -2406,10 +2406,17 @@ app.post('/api/chat/conversations/:conversationId/messages', requireFirebaseUser
           .get();
 
         if (!existingMsgSnap.empty) {
+          const existingData = existingMsgSnap.docs[0].data();
+          if (existingData.text !== msgText) {
+            return res.status(409).json({
+              error: 'clientRequestId has already been used for a message with different text',
+              code: 'STATE_CONFLICT'
+            });
+          }
           return res.json({
             status: 'success',
             message: 'Message already sent (idempotent)',
-            data: existingMsgSnap.docs[0].data()
+            data: existingData
           });
         }
       }
