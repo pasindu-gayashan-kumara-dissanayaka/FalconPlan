@@ -57,6 +57,22 @@ service cloud.firestore {
         && data.orderIndex is number && data.orderIndex >= 0;
     }
 
+    // Chat Conversations Collection: chatConversations/{conversationId}
+    match /chatConversations/{conversationId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.travelerUid || request.auth.uid == resource.data.providerUid);
+      allow write: if false; // Server-managed via trusted Express Backend / Admin SDK
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (request.auth.uid == get(/databases/$(database)/documents/chatConversations/$(conversationId)).data.travelerUid || request.auth.uid == get(/databases/$(database)/documents/chatConversations/$(conversationId)).data.providerUid);
+        allow write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+    }
+
+    // Chat Conversation Reports: chatConversationReports/{reportId}
+    match /chatConversationReports/{reportId} {
+      allow read, write: if false; // Server-managed via trusted Express Backend / Admin SDK
+    }
+
     // Community Profiles Collection: communityProfiles/{uid}
     match /communityProfiles/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid; // Own profile direct read
