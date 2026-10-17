@@ -2643,25 +2643,38 @@ app.post('/api/notifications/fcm-token', requireFirebaseUser, async (req, res) =
     try {
       const db = admin.firestore();
 
-      // Server-side atomic token ownership transfer: purge token from any previous user account
-      const oldTokenGroupSnap = await db.collectionGroup('fcmTokens').where('fcmToken', '==', tokenStr).get();
-      if (!oldTokenGroupSnap.empty) {
-        const batch = db.batch();
-        oldTokenGroupSnap.forEach(doc => {
-          const pathSegments = doc.ref.path.split('/');
-          if (pathSegments.length >= 2 && pathSegments[1] !== callerUid) {
-            batch.delete(doc.ref);
-          }
-        });
-        await batch.commit();
-      }
+      // Race-safe transactional FCM token ownership index transfer
+      const indexRef = db.collection('fcmTokenIndex').doc(tokenHash);
+      const userTokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenHash);
 
-      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenHash);
-      await tokenRef.set({
-        fcmToken: tokenStr,
-        deviceType: deviceType ? String(deviceType).trim() : 'android',
-        createdAt: now,
-        updatedAt: now
+      await db.runTransaction(async (transaction) => {
+        const indexSnap = await transaction.get(indexRef);
+
+        if (indexSnap.exists) {
+          const indexData = indexSnap.data();
+          const prevOwnerUid = indexData.ownerUid;
+
+          if (prevOwnerUid && prevOwnerUid !== callerUid) {
+            // Delete token record from previous owner's subcollection
+            const prevTokenRef = db.collection('users').doc(prevOwnerUid).collection('fcmTokens').doc(tokenHash);
+            transaction.delete(prevTokenRef);
+          }
+        }
+
+        // Update global token index & register under new caller
+        transaction.set(indexRef, {
+          tokenHash,
+          fcmToken: tokenStr,
+          ownerUid: callerUid,
+          updatedAt: now
+        });
+
+        transaction.set(userTokenRef, {
+          fcmToken: tokenStr,
+          deviceType: deviceType ? String(deviceType).trim() : 'android',
+          createdAt: now,
+          updatedAt: now
+        });
       });
 
       return res.json({

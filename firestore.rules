@@ -164,6 +164,11 @@ service cloud.firestore {
         allow write: if false; // Managed strictly via Express Backend / Admin SDK
       }
 
+      // Global FCM Token Ownership Index: fcmTokenIndex/{tokenHash}
+      match /fcmTokenIndex/{tokenHash} {
+        allow read, write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+
       // Community Following Subcollection: users/{userId}/communityFollowing/{targetUid}
       match /communityFollowing/{targetUid} {
         allow read: if isOwner(userId);
