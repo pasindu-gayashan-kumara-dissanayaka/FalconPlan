@@ -125,6 +125,25 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.ok(Array.isArray(res.json.data));
   });
 
+  test('POST /api/admin/reviews/:listingId/:reviewId/moderate hides review with admin claims', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ action: 'hide' });
+
+    const res = await makeRequest('/api/admin/reviews/listing_knuckles_101/booking_1001/moderate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'admin_user_999',
+        'x-test-mock-admin': 'true'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
   // --- SECURE USER NOTIFICATIONS BACKEND TESTS (PHASE 08-A1) ---
 
   test('POST /api/notifications/fcm-token registers FCM device token', async () => {

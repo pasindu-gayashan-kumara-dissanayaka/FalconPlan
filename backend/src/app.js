@@ -2838,6 +2838,96 @@ app.get('/api/public-listings/:listingId/reviews', async (req, res) => {
   });
 });
 
+// POST /api/admin/reviews/:listingId/:reviewId/moderate - Admin moderate review (hide / restore)
+app.post('/api/admin/reviews/:listingId/:reviewId/moderate', requireFirebaseUser, requireAdmin, async (req, res) => {
+  const { listingId, reviewId } = req.params;
+  const { action } = req.body || {};
+
+  if (action !== 'hide' && action !== 'restore') {
+    return res.status(400).json({
+      error: 'Valid action parameter ("hide" or "restore") is required',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const listingRef = db.collection('homestayListings').doc(listingId);
+      const reviewRef = listingRef.collection('reviews').doc(reviewId);
+
+      await db.runTransaction(async (transaction) => {
+        const reviewSnap = await transaction.get(reviewRef);
+        if (!reviewSnap.exists) {
+          throw new Error('REVIEW_NOT_FOUND');
+        }
+
+        const rData = reviewSnap.data();
+        const currentStatus = rData.status || 'published';
+
+        if (action === 'hide' && currentStatus === 'published') {
+          const listingSnap = await transaction.get(listingRef);
+          const lData = listingSnap.exists ? listingSnap.data() : {};
+
+          const currentCount = parseInt(lData.ratingCount, 10) || 0;
+          const currentSum = parseInt(lData.ratingSum, 10) || 0;
+
+          const newCount = Math.max(0, currentCount - 1);
+          const newSum = Math.max(0, currentSum - (rData.rating || 0));
+          const newAvg = newCount > 0 ? Math.round((newSum / newCount) * 10) / 10 : 0;
+
+          transaction.update(reviewRef, { status: 'hidden', updatedAt: now });
+          transaction.set(listingRef, {
+            ratingCount: newCount,
+            ratingSum: newSum,
+            averageRating: newAvg
+          }, { merge: true });
+        } else if (action === 'restore' && currentStatus === 'hidden') {
+          const listingSnap = await transaction.get(listingRef);
+          const lData = listingSnap.exists ? listingSnap.data() : {};
+
+          const currentCount = parseInt(lData.ratingCount, 10) || 0;
+          const currentSum = parseInt(lData.ratingSum, 10) || 0;
+
+          const newCount = currentCount + 1;
+          const newSum = currentSum + (rData.rating || 0);
+          const newAvg = Math.round((newSum / newCount) * 10) / 10;
+
+          transaction.update(reviewRef, { status: 'published', updatedAt: now });
+          transaction.set(listingRef, {
+            ratingCount: newCount,
+            ratingSum: newSum,
+            averageRating: newAvg
+          }, { merge: true });
+        }
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Review moderation status updated to ' + action
+      });
+    } catch (err) {
+      if (err.message === 'REVIEW_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Review not found',
+          code: 'NOT_FOUND'
+        });
+      }
+      return res.status(500).json({
+        error: 'Failed to moderate review: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Review moderation status updated to ' + action
+  });
+});
+
 // --- NOTIFICATION ENDPOINTS (PHASE 08-A1) ---
 
 // Helper function to create notification record
