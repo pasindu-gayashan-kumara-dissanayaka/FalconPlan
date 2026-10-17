@@ -152,6 +152,23 @@ service cloud.firestore {
         allow write: if false; // Managed strictly via Express Backend / Admin SDK
       }
 
+      // Notifications Subcollection: users/{userId}/notifications/{notificationId}
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+
+      // FCM Tokens Subcollection: users/{userId}/fcmTokens/{tokenId}
+      match /fcmTokens/{tokenId} {
+        allow read: if isOwner(userId);
+        allow write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+
+      // Global FCM Token Ownership Index: fcmTokenIndex/{tokenHash}
+      match /fcmTokenIndex/{tokenHash} {
+        allow read, write: if false; // Managed strictly via Express Backend / Admin SDK
+      }
+
       // Community Following Subcollection: users/{userId}/communityFollowing/{targetUid}
       match /communityFollowing/{targetUid} {
         allow read: if isOwner(userId);

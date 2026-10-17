@@ -2,6 +2,7 @@
 
 const express = require('express');
 const helmet = require('helmet');
+const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { requireFirebaseUser, requireAdmin, requireRole } = require('./auth');
 
@@ -2578,6 +2579,329 @@ app.post('/api/chat/conversations/:conversationId/report', requireFirebaseUser, 
   return res.json({
     status: 'success',
     message: 'Chat conversation reported for review'
+  });
+});
+
+// --- NOTIFICATION ENDPOINTS (PHASE 08-A1) ---
+
+// Helper function to create notification record
+async function createNotificationRecord(db, recipientUid, notifData) {
+  if (!recipientUid || !notifData) return;
+  const now = Date.now();
+  const sourceEventId = notifData.sourceEventId ? String(notifData.sourceEventId).trim() : '';
+
+  // Deduplication check: verify if a notification for the same source event & type already exists
+  if (sourceEventId) {
+    const existingSnap = await db.collection('users').doc(recipientUid).collection('notifications')
+      .where('sourceEventId', '==', sourceEventId)
+      .where('type', '==', notifData.type || 'system_event')
+      .limit(1)
+      .get();
+
+    if (!existingSnap.empty) {
+      return existingSnap.docs[0].data();
+    }
+  }
+
+  const notificationId = 'notif_' + now + '_' + Math.floor(Math.random() * 1000);
+
+  const notifRecord = {
+    notificationId,
+    recipientUid,
+    type: notifData.type || 'system_event',
+    sourceEventId,
+    entityType: notifData.entityType || '',
+    entityId: notifData.entityId || '',
+    title: notifData.title || 'FalconPlan Update',
+    body: notifData.body || '',
+    isRead: false,
+    createdAt: now,
+    readAt: null
+  };
+
+  await db.collection('users').doc(recipientUid).collection('notifications').doc(notificationId).set(notifRecord);
+  return notifRecord;
+}
+
+// POST /api/notifications/fcm-token - Register FCM device push token
+app.post('/api/notifications/fcm-token', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { fcmToken, deviceType } = req.body || {};
+
+  if (!fcmToken || typeof fcmToken !== 'string' || !fcmToken.trim()) {
+    return res.status(400).json({
+      error: 'Valid fcmToken string is required',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const tokenStr = fcmToken.trim();
+  const tokenHash = crypto.createHash('sha256').update(tokenStr).digest('hex');
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+
+      // Race-safe transactional FCM token ownership index transfer
+      const indexRef = db.collection('fcmTokenIndex').doc(tokenHash);
+      const userTokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenHash);
+
+      await db.runTransaction(async (transaction) => {
+        const indexSnap = await transaction.get(indexRef);
+
+        if (indexSnap.exists) {
+          const indexData = indexSnap.data();
+          const prevOwnerUid = indexData.ownerUid;
+
+          if (prevOwnerUid && prevOwnerUid !== callerUid) {
+            // Delete token record from previous owner's subcollection
+            const prevTokenRef = db.collection('users').doc(prevOwnerUid).collection('fcmTokens').doc(tokenHash);
+            transaction.delete(prevTokenRef);
+          }
+        }
+
+        // Update global token index & register under new caller
+        transaction.set(indexRef, {
+          tokenHash,
+          fcmToken: tokenStr,
+          ownerUid: callerUid,
+          updatedAt: now
+        });
+
+        transaction.set(userTokenRef, {
+          fcmToken: tokenStr,
+          deviceType: deviceType ? String(deviceType).trim() : 'android',
+          createdAt: now,
+          updatedAt: now
+        });
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'FCM device token registered successfully'
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to register FCM token: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'FCM device token registered successfully'
+  });
+});
+
+// DELETE /api/notifications/fcm-token - Unregister FCM device push token on logout
+app.delete('/api/notifications/fcm-token', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const fcmTokenVal = (req.body && req.body.fcmToken) || req.query.fcmToken;
+
+  if (!fcmTokenVal || typeof fcmTokenVal !== 'string' || !fcmTokenVal.trim()) {
+    return res.status(400).json({
+      error: 'Valid fcmToken string is required in request body or query parameter',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const tokenStr = fcmTokenVal.trim();
+  const tokenHash = crypto.createHash('sha256').update(tokenStr).digest('hex');
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenHash);
+      await tokenRef.delete();
+
+      return res.json({
+        status: 'success',
+        message: 'FCM device token unregistered successfully'
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to unregister FCM token: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'FCM device token unregistered successfully'
+  });
+});
+
+// GET /api/notifications/unread-count - Get caller's authoritative unread notification count
+app.get('/api/notifications/unread-count', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const unreadSnap = await db.collection('users').doc(callerUid).collection('notifications')
+        .where('isRead', '==', false)
+        .get();
+
+      return res.json({
+        status: 'success',
+        unreadCount: unreadSnap.size
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve unread notification count: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    unreadCount: 1
+  });
+});
+
+// GET /api/notifications/mine - Get caller's in-app notifications
+app.get('/api/notifications/mine', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const notifsSnap = await db.collection('users').doc(callerUid).collection('notifications')
+        .orderBy('createdAt', 'desc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const notifs = [];
+      let unreadCount = 0;
+
+      notifsSnap.forEach(doc => {
+        const data = doc.data();
+        if (!data.isRead) unreadCount++;
+        notifs.push(data);
+      });
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        unreadCount,
+        total: notifs.length,
+        data: notifs
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve notifications: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    unreadCount: 1,
+    total: 1,
+    data: [{
+      notificationId: 'notif_1001',
+      recipientUid: callerUid,
+      type: 'booking_created',
+      title: 'New Booking Request',
+      body: 'A traveler requested a homestay booking.',
+      isRead: false,
+      createdAt: Date.now()
+    }]
+  });
+});
+
+// PATCH /api/notifications/:notificationId/read - Mark notification as read
+app.patch('/api/notifications/:notificationId/read', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const notificationId = req.params.notificationId;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const notifRef = db.collection('users').doc(callerUid).collection('notifications').doc(notificationId);
+      const docSnap = await notifRef.get();
+
+      if (!docSnap.exists) {
+        return res.status(404).json({
+          error: 'Notification not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      await notifRef.update({
+        isRead: true,
+        readAt: now
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Notification marked as read'
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to update notification: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Notification marked as read'
+  });
+});
+
+// PATCH /api/notifications/mark-all-read - Mark all caller's notifications as read
+app.patch('/api/notifications/mark-all-read', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const notifsSnap = await db.collection('users').doc(callerUid).collection('notifications')
+        .where('isRead', '==', false)
+        .get();
+
+      const batch = db.batch();
+      notifsSnap.forEach(doc => {
+        batch.update(doc.ref, {
+          isRead: true,
+          readAt: now
+        });
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'All notifications marked as read',
+        count: notifsSnap.size
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to mark notifications read: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'All notifications marked as read',
+    count: 1
   });
 });
 

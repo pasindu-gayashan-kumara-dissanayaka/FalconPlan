@@ -77,6 +77,124 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- SECURE USER NOTIFICATIONS BACKEND TESTS (PHASE 08-A1) ---
+
+  test('POST /api/notifications/fcm-token registers FCM device token', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ fcmToken: 'fcm_sample_token_abc_123', deviceType: 'android' });
+
+    const res = await makeRequest('/api/notifications/fcm-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('POST /api/notifications/fcm-token reassigns token when new user logs in on same device', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ fcmToken: 'fcm_shared_device_token_999', deviceType: 'android' });
+
+    const resA = await makeRequest('/api/notifications/fcm-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+    assert.equal(resA.status, 200);
+
+    const resB = await makeRequest('/api/notifications/fcm-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_456'
+      },
+      body: payload
+    });
+    assert.equal(resB.status, 200);
+    assert.equal(resB.json.status, 'success');
+  });
+
+  test('DELETE /api/notifications/fcm-token unregisters FCM device token', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/fcm-token?fcmToken=fcm_sample_token_abc_123', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('GET /api/notifications/unread-count returns caller unread notification count', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/unread-count', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(typeof res.json.unreadCount, 'number');
+  });
+
+  test('GET /api/notifications/mine returns caller in-app notifications', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/mine', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('PATCH /api/notifications/:notificationId/read marks notification as read', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/notif_1001/read', {
+      method: 'PATCH',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('PATCH /api/notifications/mark-all-read marks all notifications as read', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/mark-all-read', {
+      method: 'PATCH',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
   // --- SECURE BOOKING-LINKED CHAT BACKEND TESTS (PHASE 07-A1) ---
 
   test('POST /api/chat/conversations/initiate initiates booking chat', async () => {
