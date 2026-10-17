@@ -1645,6 +1645,296 @@ app.delete('/api/community/posts/:postId/photos/:photoId', requireFirebaseUser, 
   });
 });
 
+// --- BOOKING-LINKED PRIVATE CHAT ENDPOINTS (PHASE 07-A1) ---
+
+// POST /api/chat/conversations/initiate - Initiate or retrieve booking-linked chat conversation
+app.post('/api/chat/conversations/initiate', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { bookingId } = req.body || {};
+
+  if (!bookingId || typeof bookingId !== 'string' || !bookingId.trim()) {
+    return res.status(400).json({
+      error: 'Valid bookingId is required to initiate booking-linked chat',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const conversationId = 'chat_' + bookingId.trim();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const bookingRef = db.collection('bookings').doc(bookingId.trim());
+      const bookingSnap = await bookingRef.get();
+
+      if (!bookingSnap.exists) {
+        return res.status(404).json({
+          error: 'Associated booking request not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const booking = bookingSnap.data();
+      if (booking.travelerUid !== callerUid && booking.providerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You are not a participant in this booking request',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      const convRef = db.collection('chatConversations').doc(conversationId);
+      const convSnap = await convRef.get();
+
+      if (!convSnap.exists) {
+        const initialConv = {
+          conversationId,
+          bookingId: bookingId.trim(),
+          travelerUid: booking.travelerUid,
+          providerUid: booking.providerUid,
+          lastMessageText: 'Conversation started',
+          lastMessageAt: now,
+          createdAt: now,
+          updatedAt: now
+        };
+
+        await convRef.set(initialConv);
+
+        return res.json({
+          status: 'success',
+          message: 'Booking chat conversation initiated successfully',
+          data: initialConv
+        });
+      }
+
+      return res.json({
+        status: 'success',
+        data: convSnap.data()
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to initiate booking chat: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Booking chat conversation initiated successfully',
+    data: {
+      conversationId,
+      bookingId: bookingId.trim(),
+      travelerUid: callerUid,
+      providerUid: 'provider_user_123',
+      lastMessageText: 'Conversation started',
+      lastMessageAt: now,
+      createdAt: now,
+      updatedAt: now
+    }
+  });
+});
+
+// GET /api/chat/conversations/mine - Get caller's active booking chat conversations
+app.get('/api/chat/conversations/mine', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const travelerSnap = await db.collection('chatConversations')
+        .where('travelerUid', '==', callerUid)
+        .orderBy('lastMessageAt', 'desc')
+        .get();
+
+      const providerSnap = await db.collection('chatConversations')
+        .where('providerUid', '==', callerUid)
+        .orderBy('lastMessageAt', 'desc')
+        .get();
+
+      const map = new Map();
+      travelerSnap.forEach(doc => map.set(doc.id, doc.data()));
+      providerSnap.forEach(doc => map.set(doc.id, doc.data()));
+
+      const list = Array.from(map.values()).sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+
+      return res.json({
+        status: 'success',
+        total: list.length,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve active chat conversations: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    total: 1,
+    data: [{
+      conversationId: 'chat_booking_1001',
+      bookingId: 'booking_1001',
+      travelerUid: callerUid,
+      providerUid: 'provider_user_123',
+      lastMessageText: 'Looking forward to your stay!',
+      lastMessageAt: Date.now()
+    }]
+  });
+});
+
+// POST /api/chat/conversations/:conversationId/messages - Send private message in booking chat
+app.post('/api/chat/conversations/:conversationId/messages', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const conversationId = req.params.conversationId;
+  const { text } = req.body || {};
+
+  const msgText = text ? String(text).trim() : '';
+  if (!msgText || msgText.length > 1000) {
+    return res.status(400).json({
+      error: 'Message text is required and must be between 1 and 1000 characters',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const now = Date.now();
+  const messageId = 'msg_' + now + '_' + Math.floor(Math.random() * 1000);
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const convRef = db.collection('chatConversations').doc(conversationId);
+      const convSnap = await convRef.get();
+
+      if (!convSnap.exists) {
+        return res.status(404).json({
+          error: 'Chat conversation not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const conv = convSnap.data();
+      if (conv.travelerUid !== callerUid && conv.providerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You are not a participant in this conversation',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      const msgRecord = {
+        messageId,
+        conversationId,
+        bookingId: conv.bookingId,
+        senderUid: callerUid,
+        text: msgText,
+        createdAt: now
+      };
+
+      const batch = db.batch();
+      batch.set(convRef.collection('messages').doc(messageId), msgRecord);
+      batch.update(convRef, {
+        lastMessageText: msgText.slice(0, 100),
+        lastMessageAt: now,
+        updatedAt: now
+      });
+
+      await batch.commit();
+
+      return res.json({
+        status: 'success',
+        message: 'Message sent successfully',
+        data: msgRecord
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to send chat message: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'Message sent successfully',
+    data: {
+      messageId,
+      conversationId,
+      senderUid: callerUid,
+      text: msgText,
+      createdAt: now
+    }
+  });
+});
+
+// GET /api/chat/conversations/:conversationId/messages - Get messages in booking chat
+app.get('/api/chat/conversations/:conversationId/messages', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const conversationId = req.params.conversationId;
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const convRef = db.collection('chatConversations').doc(conversationId);
+      const convSnap = await convRef.get();
+
+      if (!convSnap.exists) {
+        return res.status(404).json({
+          error: 'Chat conversation not found',
+          code: 'NOT_FOUND'
+        });
+      }
+
+      const conv = convSnap.data();
+      if (conv.travelerUid !== callerUid && conv.providerUid !== callerUid) {
+        return res.status(403).json({
+          error: 'Forbidden: You are not a participant in this conversation',
+          code: 'FORBIDDEN'
+        });
+      }
+
+      const snapshot = await convRef.collection('messages')
+        .orderBy('createdAt', 'asc')
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .get();
+
+      const messages = [];
+      snapshot.forEach(doc => messages.push(doc.data()));
+
+      return res.json({
+        status: 'success',
+        page,
+        limit,
+        total: messages.length,
+        data: messages
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to retrieve chat messages: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    page,
+    limit,
+    total: 1,
+    data: [{
+      messageId: 'msg_101',
+      conversationId,
+      senderUid: 'provider_user_123',
+      text: 'Looking forward to welcoming you to our homestay!',
+      createdAt: Date.now()
+    }]
+  });
+});
+
 // --- SECURE PAYMENT RECORDS & MANUAL PAYMENT ENDPOINTS (PHASE 05-B1) ---
 
 // GET /api/admin/payments - Paginated list of payment records under review for admin audit
