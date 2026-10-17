@@ -2349,7 +2349,7 @@ app.get('/api/chat/conversations/mine', requireFirebaseUser, async (req, res) =>
 app.post('/api/chat/conversations/:conversationId/messages', requireFirebaseUser, async (req, res) => {
   const callerUid = req.auth.uid;
   const conversationId = req.params.conversationId;
-  const { text } = req.body || {};
+  const { text, clientRequestId } = req.body || {};
 
   const msgText = text ? String(text).trim() : '';
   if (!msgText || msgText.length > 1000) {
@@ -2383,12 +2383,44 @@ app.post('/api/chat/conversations/:conversationId/messages', requireFirebaseUser
         });
       }
 
+      // Verify associated booking status
+      if (conv.bookingId) {
+        const bookingSnap = await db.collection('bookings').doc(conv.bookingId).get();
+        if (bookingSnap.exists) {
+          const bStatus = bookingSnap.data().status;
+          if (bStatus === 'cancelled' || bStatus === 'declined') {
+            return res.status(400).json({
+              error: 'New messages cannot be sent for cancelled or declined booking requests',
+              code: 'BAD_REQUEST'
+            });
+          }
+        }
+      }
+
+      // Idempotency check using clientRequestId
+      if (clientRequestId && typeof clientRequestId === 'string') {
+        const existingMsgSnap = await convRef.collection('messages')
+          .where('clientRequestId', '==', clientRequestId.trim())
+          .where('senderUid', '==', callerUid)
+          .limit(1)
+          .get();
+
+        if (!existingMsgSnap.empty) {
+          return res.json({
+            status: 'success',
+            message: 'Message already sent (idempotent)',
+            data: existingMsgSnap.docs[0].data()
+          });
+        }
+      }
+
       const msgRecord = {
         messageId,
         conversationId,
         bookingId: conv.bookingId,
         senderUid: callerUid,
         text: msgText,
+        clientRequestId: clientRequestId ? String(clientRequestId).trim() : '',
         createdAt: now
       };
 
@@ -2423,6 +2455,7 @@ app.post('/api/chat/conversations/:conversationId/messages', requireFirebaseUser
       conversationId,
       senderUid: callerUid,
       text: msgText,
+      clientRequestId: clientRequestId || '',
       createdAt: now
     }
   });
