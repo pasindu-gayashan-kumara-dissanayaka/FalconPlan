@@ -2642,6 +2642,20 @@ app.post('/api/notifications/fcm-token', requireFirebaseUser, async (req, res) =
   if (admin.apps.length) {
     try {
       const db = admin.firestore();
+
+      // Server-side atomic token ownership transfer: purge token from any previous user account
+      const oldTokenGroupSnap = await db.collectionGroup('fcmTokens').where('fcmToken', '==', tokenStr).get();
+      if (!oldTokenGroupSnap.empty) {
+        const batch = db.batch();
+        oldTokenGroupSnap.forEach(doc => {
+          const pathSegments = doc.ref.path.split('/');
+          if (pathSegments.length >= 2 && pathSegments[1] !== callerUid) {
+            batch.delete(doc.ref);
+          }
+        });
+        await batch.commit();
+      }
+
       const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenHash);
       await tokenRef.set({
         fcmToken: tokenStr,

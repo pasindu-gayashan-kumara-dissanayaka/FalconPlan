@@ -97,6 +97,34 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.status, 'success');
   });
 
+  test('POST /api/notifications/fcm-token reassigns token when new user logs in on same device', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ fcmToken: 'fcm_shared_device_token_999', deviceType: 'android' });
+
+    const resA = await makeRequest('/api/notifications/fcm-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+    assert.equal(resA.status, 200);
+
+    const resB = await makeRequest('/api/notifications/fcm-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'provider_user_456'
+      },
+      body: payload
+    });
+    assert.equal(resB.status, 200);
+    assert.equal(resB.json.status, 'success');
+  });
+
   test('DELETE /api/notifications/fcm-token unregisters FCM device token', async () => {
     process.env.NODE_ENV = 'test';
     const res = await makeRequest('/api/notifications/fcm-token?fcmToken=fcm_sample_token_abc_123', {
