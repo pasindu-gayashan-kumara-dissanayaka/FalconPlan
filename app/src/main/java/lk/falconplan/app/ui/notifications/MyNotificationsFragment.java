@@ -153,6 +153,12 @@ public class MyNotificationsFragment extends Fragment implements NotificationAda
                         lk.falconplan.app.ui.chat.BookingChatFragment.newInstanceForConversation(item.getEntityId()), true
                 );
             }
+        } else if ("payment".equals(item.getEntityType()) && item.getEntityId() != null && !item.getEntityId().isEmpty()) {
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).loadMainContentFragment(
+                        lk.falconplan.app.ui.booking.BookingPaymentFragment.newInstance(item.getEntityId()), true
+                );
+            }
         }
     }
 }
