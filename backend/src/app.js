@@ -2622,6 +2622,88 @@ async function createNotificationRecord(db, recipientUid, notifData) {
   return notifRecord;
 }
 
+// POST /api/notifications/fcm-token - Register FCM device push token
+app.post('/api/notifications/fcm-token', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const { fcmToken, deviceType } = req.body || {};
+
+  if (!fcmToken || typeof fcmToken !== 'string' || !fcmToken.trim()) {
+    return res.status(400).json({
+      error: 'Valid fcmToken string is required',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const tokenStr = fcmToken.trim();
+  const now = Date.now();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenStr.slice(0, 100));
+      await tokenRef.set({
+        fcmToken: tokenStr,
+        deviceType: deviceType ? String(deviceType).trim() : 'android',
+        createdAt: now,
+        updatedAt: now
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'FCM device token registered successfully'
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to register FCM token: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'FCM device token registered successfully'
+  });
+});
+
+// DELETE /api/notifications/fcm-token - Unregister FCM device push token on logout
+app.delete('/api/notifications/fcm-token', requireFirebaseUser, async (req, res) => {
+  const callerUid = req.auth.uid;
+  const fcmTokenVal = (req.body && req.body.fcmToken) || req.query.fcmToken;
+
+  if (!fcmTokenVal || typeof fcmTokenVal !== 'string' || !fcmTokenVal.trim()) {
+    return res.status(400).json({
+      error: 'Valid fcmToken string is required',
+      code: 'BAD_REQUEST'
+    });
+  }
+
+  const tokenStr = fcmTokenVal.trim();
+
+  if (admin.apps.length) {
+    try {
+      const db = admin.firestore();
+      const tokenRef = db.collection('users').doc(callerUid).collection('fcmTokens').doc(tokenStr.slice(0, 100));
+      await tokenRef.delete();
+
+      return res.json({
+        status: 'success',
+        message: 'FCM device token unregistered successfully'
+      });
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to unregister FCM token: ' + err.message,
+        code: 'INTERNAL_ERROR'
+      });
+    }
+  }
+
+  return res.json({
+    status: 'success',
+    message: 'FCM device token unregistered successfully'
+  });
+});
+
 // GET /api/notifications/unread-count - Get caller's authoritative unread notification count
 app.get('/api/notifications/unread-count', requireFirebaseUser, async (req, res) => {
   const callerUid = req.auth.uid;

@@ -79,6 +79,38 @@ describe('FalconPlan Backend API & Security Tests', () => {
 
   // --- SECURE USER NOTIFICATIONS BACKEND TESTS (PHASE 08-A1) ---
 
+  test('POST /api/notifications/fcm-token registers FCM device token', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ fcmToken: 'fcm_sample_token_abc_123', deviceType: 'android' });
+
+    const res = await makeRequest('/api/notifications/fcm-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
+  test('DELETE /api/notifications/fcm-token unregisters FCM device token', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/notifications/fcm-token?fcmToken=fcm_sample_token_abc_123', {
+      method: 'DELETE',
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+  });
+
   test('GET /api/notifications/unread-count returns caller unread notification count', async () => {
     process.env.NODE_ENV = 'test';
     const res = await makeRequest('/api/notifications/unread-count', {
