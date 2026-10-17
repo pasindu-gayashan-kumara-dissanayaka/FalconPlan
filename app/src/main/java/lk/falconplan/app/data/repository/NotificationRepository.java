@@ -28,4 +28,8 @@ public interface NotificationRepository {
     void markAsRead(String idToken, String notificationId, OperationCallback callback);
 
     void markAllAsRead(String idToken, OperationCallback callback);
+
+    void registerFcmToken(String idToken, String fcmToken, OperationCallback callback);
+
+    void unregisterFcmToken(String idToken, String fcmToken, OperationCallback callback);
 }

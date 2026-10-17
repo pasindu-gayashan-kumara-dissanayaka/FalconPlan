@@ -160,4 +160,65 @@ public class NotificationRepositoryImpl implements NotificationRepository {
             }
         });
     }
+
+    @Override
+    public void registerFcmToken(String idToken, String fcmToken, OperationCallback callback) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(BASE_URL + "notifications/fcm-token");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                if (idToken != null && !idToken.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                }
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setDoOutput(true);
+
+                JSONObject body = new JSONObject();
+                body.put("fcmToken", fcmToken);
+                body.put("deviceType", "android");
+
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    byte[] input = body.toString().getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                int statusCode = conn.getResponseCode();
+                if (statusCode == 200) {
+                    mainHandler.post(callback::onSuccess);
+                } else {
+                    mainHandler.post(() -> callback.onError(new Exception("Register Token Error " + statusCode)));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> callback.onError(e));
+            }
+        });
+    }
+
+    @Override
+    public void unregisterFcmToken(String idToken, String fcmToken, OperationCallback callback) {
+        executor.execute(() -> {
+            try {
+                URL url = new URL(BASE_URL + "notifications/fcm-token?fcmToken=" + fcmToken);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("DELETE");
+                if (idToken != null && !idToken.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + idToken);
+                }
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+
+                int statusCode = conn.getResponseCode();
+                if (statusCode == 200) {
+                    mainHandler.post(callback::onSuccess);
+                } else {
+                    mainHandler.post(() -> callback.onError(new Exception("Unregister Token Error " + statusCode)));
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> callback.onError(e));
+            }
+        });
+    }
 }
