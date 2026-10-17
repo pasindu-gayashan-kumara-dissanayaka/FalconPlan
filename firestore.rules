@@ -79,8 +79,7 @@ service cloud.firestore {
       allow write: if false; // Server-managed via Express Backend / Admin SDK
 
       match /reviews/{reviewId} {
-        allow read: if resource == null || resource.data.status == 'published'; // Public verified published reviews read
-        allow write: if false; // Server-managed via Express Backend / Admin SDK
+        allow read, write: if false; // Server-managed via trusted Express Backend / Admin SDK
       }
     }
 
