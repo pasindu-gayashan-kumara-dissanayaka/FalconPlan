@@ -97,5 +97,16 @@
                 app:strokeColor="@color/accent_orange" />
         </LinearLayout>
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnChatHost"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:text="Chat with Homestay Host"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            app:cornerRadius="10dp" />
+
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

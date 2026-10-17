@@ -77,6 +77,74 @@ describe('FalconPlan Backend API & Security Tests', () => {
     assert.equal(res.json.data.uid, 'user_falcon_789');
   });
 
+  // --- SECURE BOOKING-LINKED CHAT BACKEND TESTS (PHASE 07-A1) ---
+
+  test('POST /api/chat/conversations/initiate initiates booking chat', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ bookingId: 'booking_1001' });
+
+    const res = await makeRequest('/api/chat/conversations/initiate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.bookingId, 'booking_1001');
+  });
+
+  test('GET /api/chat/conversations/mine returns active chat list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/chat/conversations/mine', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
+  test('POST /api/chat/conversations/:conversationId/messages sends private message', async () => {
+    process.env.NODE_ENV = 'test';
+    const payload = JSON.stringify({ text: 'Hello! Excited for our upcoming stay.' });
+
+    const res = await makeRequest('/api/chat/conversations/chat_booking_1001/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      },
+      body: payload
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.equal(res.json.data.text, 'Hello! Excited for our upcoming stay.');
+  });
+
+  test('GET /api/chat/conversations/:conversationId/messages returns messages list', async () => {
+    process.env.NODE_ENV = 'test';
+    const res = await makeRequest('/api/chat/conversations/chat_booking_1001/messages', {
+      headers: {
+        'x-test-mock-auth': 'true',
+        'x-test-mock-uid': 'traveler_user_123'
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'success');
+    assert.ok(Array.isArray(res.json.data));
+  });
+
   // --- COMMUNITY POSTS BACKEND TESTS (PHASE 06-A1) ---
 
   // --- SECURE COMMUNITY FOLLOW / UNFOLLOW BACKEND TESTS (PHASE 06-C2-A) ---

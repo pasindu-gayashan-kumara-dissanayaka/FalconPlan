@@ -166,4 +166,13 @@ public class ProviderBookingDashboardFragment extends Fragment implements Provid
             ((MainActivity) getActivity()).loadMainContentFragment(ProviderBookingDetailFragment.newInstance(booking.getBookingId()), true);
         }
     }
+
+    @Override
+    public void onChatClick(Booking booking) {
+        if (getActivity() instanceof MainActivity && booking != null && booking.getBookingId() != null) {
+            ((MainActivity) getActivity()).loadMainContentFragment(
+                    lk.falconplan.app.ui.chat.BookingChatFragment.newInstance(booking.getBookingId()), true
+            );
+        }
+    }
 }

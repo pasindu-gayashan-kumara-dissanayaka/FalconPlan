@@ -118,6 +118,15 @@ public class ProfileFragment extends Fragment {
             });
         }
 
+        View btnMyBookingChats = view.findViewById(R.id.btnMyBookingChats);
+        if (btnMyBookingChats != null) {
+            btnMyBookingChats.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(lk.falconplan.app.ui.chat.MyChatConversationsFragment.newInstance(), true);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnSignOut).setOnClickListener(v -> {
             authViewModel.signOut();
             if (getActivity() instanceof MainActivity) {

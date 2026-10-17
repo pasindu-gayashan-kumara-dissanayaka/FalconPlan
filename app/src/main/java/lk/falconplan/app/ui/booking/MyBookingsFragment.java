@@ -104,6 +104,15 @@ public class MyBookingsFragment extends Fragment implements BookingAdapter.OnBoo
     }
 
     @Override
+    public void onChatClick(Booking booking) {
+        if (getActivity() instanceof MainActivity && booking != null && booking.getBookingId() != null) {
+            ((MainActivity) getActivity()).loadMainContentFragment(
+                    lk.falconplan.app.ui.chat.BookingChatFragment.newInstance(booking.getBookingId()), true
+            );
+        }
+    }
+
+    @Override
     public void onCancelClick(Booking booking) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null || booking == null || booking.getBookingId() == null) return;

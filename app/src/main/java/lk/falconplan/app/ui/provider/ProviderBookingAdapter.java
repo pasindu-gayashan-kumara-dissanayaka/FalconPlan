@@ -25,6 +25,7 @@ public class ProviderBookingAdapter extends RecyclerView.Adapter<ProviderBooking
         void onAcceptClick(Booking booking);
         void onDeclineClick(Booking booking);
         void onItemClick(Booking booking);
+        void onChatClick(Booking booking);
     }
 
     public void setOnBookingActionListener(OnBookingActionListener listener) {
@@ -67,6 +68,7 @@ public class ProviderBookingAdapter extends RecyclerView.Adapter<ProviderBooking
         private final View layoutDecisionActions;
         private final Button btnAcceptBooking;
         private final Button btnDeclineBooking;
+        private final Button btnChatTraveler;
 
         public BookingViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -77,6 +79,7 @@ public class ProviderBookingAdapter extends RecyclerView.Adapter<ProviderBooking
             layoutDecisionActions = itemView.findViewById(R.id.layoutDecisionActions);
             btnAcceptBooking = itemView.findViewById(R.id.btnAcceptBooking);
             btnDeclineBooking = itemView.findViewById(R.id.btnDeclineBooking);
+            btnChatTraveler = itemView.findViewById(R.id.btnChatTraveler);
         }
 
         public void bind(Booking item, OnBookingActionListener listener) {
@@ -98,6 +101,12 @@ public class ProviderBookingAdapter extends RecyclerView.Adapter<ProviderBooking
                 });
             } else {
                 layoutDecisionActions.setVisibility(View.GONE);
+            }
+
+            if (btnChatTraveler != null) {
+                btnChatTraveler.setOnClickListener(v -> {
+                    if (listener != null) listener.onChatClick(item);
+                });
             }
 
             itemView.setOnClickListener(v -> {
