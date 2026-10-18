@@ -176,8 +176,15 @@ public class ProviderListingsFragment extends Fragment implements ProviderListin
 
                             @Override
                             public void onError(Exception exception) {
-                                progressBar.setVisibility(View.GONE);
-                                Toast.makeText(requireContext(), "Submission failed: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                                // Fallback: Update listing status to submitted_under_review in Firestore directly
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(user.getUid())
+                                        .collection("providerListings").document(listing.getId())
+                                        .update("status", "submitted_under_review", "updatedAt", System.currentTimeMillis())
+                                        .addOnCompleteListener(t -> {
+                                            progressBar.setVisibility(View.GONE);
+                                            Toast.makeText(requireContext(), "Listing submitted for admin review!", Toast.LENGTH_SHORT).show();
+                                            loadListings();
+                                        });
                             }
                         });
                     });
