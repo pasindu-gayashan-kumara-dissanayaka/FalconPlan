@@ -88,6 +88,11 @@ public class PlanDetailFragment extends Fragment implements PlanStopAdapter.OnSt
         view.findViewById(R.id.btnDeletePlan).setOnClickListener(v -> confirmDeletePlan());
         view.findViewById(R.id.btnAddStop).setOnClickListener(v -> showAddDestinationPicker());
 
+        View btnEditPlanDetails = view.findViewById(R.id.btnEditPlanDetails);
+        if (btnEditPlanDetails != null) {
+            btnEditPlanDetails.setOnClickListener(v -> showEditPlanDialog());
+        }
+
         btnPublishToggle.setOnClickListener(v -> togglePublishState());
 
         recyclerStops.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -260,6 +265,60 @@ public class PlanDetailFragment extends Fragment implements PlanStopAdapter.OnSt
                 Toast.makeText(requireContext(), "Failed to add stop: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void showEditPlanDialog() {
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user == null || currentPlan == null) return;
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(requireContext());
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(32, 16, 32, 16);
+
+        EditText editTitle = new EditText(requireContext());
+        editTitle.setText(currentPlan.getTitle());
+        editTitle.setHint("Plan Title");
+        layout.addView(editTitle);
+
+        EditText editDesc = new EditText(requireContext());
+        editDesc.setText(currentPlan.getDescription());
+        editDesc.setHint("Plan Description");
+        layout.addView(editDesc);
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Edit Travel Plan Details")
+                .setView(layout)
+                .setPositiveButton("Save Changes", (dialog, which) -> {
+                    String newTitle = editTitle.getText() != null ? editTitle.getText().toString().trim() : "";
+                    String newDesc = editDesc.getText() != null ? editDesc.getText().toString().trim() : "";
+
+                    if (newTitle.isEmpty()) {
+                        Toast.makeText(requireContext(), "Title cannot be empty.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    currentPlan.setTitle(newTitle);
+                    currentPlan.setDescription(newDesc);
+
+                    progressBar.setVisibility(View.VISIBLE);
+                    travelPlanRepository.updatePlan(user.getUid(), currentPlan, new TravelPlanRepository.OperationCallback() {
+                        @Override
+                        public void onSuccess() {
+                            progressBar.setVisibility(View.GONE);
+                            txtPlanTitle.setText(newTitle);
+                            txtPlanDescription.setText(newDesc.isEmpty() ? "No description." : newDesc);
+                            Toast.makeText(requireContext(), "Plan details updated!", Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onError(Exception exception) {
+                            progressBar.setVisibility(View.GONE);
+                            Toast.makeText(requireContext(), "Failed to update: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
+                .show();
     }
 
     private void confirmDeletePlan() {

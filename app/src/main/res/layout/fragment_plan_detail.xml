@@ -39,6 +39,15 @@
             tools:text="Ella &amp; Knuckles Trek" />
 
         <ImageButton
+            android:id="@+id/btnEditPlanDetails"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_nav_profile"
+            app:tint="@color/primary" />
+
+        <ImageButton
             android:id="@+id/btnDeletePlan"
             android:layout_width="40dp"
             android:layout_height="40dp"
