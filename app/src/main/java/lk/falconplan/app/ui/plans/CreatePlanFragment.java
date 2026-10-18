@@ -107,7 +107,26 @@ public class CreatePlanFragment extends Fragment {
         String description = editPlanDescription.getText() != null ? editPlanDescription.getText().toString().trim() : "";
 
         if (title.isEmpty()) {
-            Toast.makeText(requireContext(), "Please enter a plan title.", Toast.LENGTH_SHORT).show();
+            editPlanTitle.setError("Plan title is required");
+            editPlanTitle.requestFocus();
+            return;
+        }
+
+        if (title.length() < 3) {
+            editPlanTitle.setError("Plan title must be at least 3 characters");
+            editPlanTitle.requestFocus();
+            return;
+        }
+
+        if (title.length() > 100) {
+            editPlanTitle.setError("Plan title cannot exceed 100 characters");
+            editPlanTitle.requestFocus();
+            return;
+        }
+
+        if (description.length() > 500) {
+            editPlanDescription.setError("Description cannot exceed 500 characters");
+            editPlanDescription.requestFocus();
             return;
         }
 

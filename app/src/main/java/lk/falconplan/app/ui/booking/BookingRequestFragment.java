@@ -81,14 +81,41 @@ public class BookingRequestFragment extends Fragment {
         view.findViewById(R.id.btnSendBookingRequest).setOnClickListener(v -> sendBookingRequest());
     }
 
+    private boolean validateInputs(String checkIn, String checkOut, int guests) {
+        if (!checkIn.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+            editCheckInDate.setError("Valid Check-in date required (YYYY-MM-DD)");
+            editCheckInDate.requestFocus();
+            return false;
+        }
+
+        if (!checkOut.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+            editCheckOutDate.setError("Valid Check-out date required (YYYY-MM-DD)");
+            editCheckOutDate.requestFocus();
+            return false;
+        }
+
+        if (checkIn.compareTo(checkOut) >= 0) {
+            editCheckOutDate.setError("Check-out date must be after Check-in date");
+            editCheckOutDate.requestFocus();
+            return false;
+        }
+
+        if (guests < 1 || guests > 20) {
+            editGuests.setError("Guests count must be between 1 and 20");
+            editGuests.requestFocus();
+            return false;
+        }
+
+        return true;
+    }
+
     private void fetchServerQuote() {
         String checkIn = editCheckInDate.getText() != null ? editCheckInDate.getText().toString().trim() : "";
         String checkOut = editCheckOutDate.getText() != null ? editCheckOutDate.getText().toString().trim() : "";
         int guests = parseIntSafe(editGuests.getText() != null ? editGuests.getText().toString() : "1");
         boolean breakfast = switchBreakfast.isChecked();
 
-        if (!checkIn.matches("^\\d{4}-\\d{2}-\\d{2}$") || !checkOut.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
-            Toast.makeText(requireContext(), "Please enter valid check-in and check-out dates (YYYY-MM-DD).", Toast.LENGTH_SHORT).show();
+        if (!validateInputs(checkIn, checkOut, guests)) {
             return;
         }
 
@@ -123,8 +150,7 @@ public class BookingRequestFragment extends Fragment {
         int guests = parseIntSafe(editGuests.getText() != null ? editGuests.getText().toString() : "1");
         boolean breakfast = switchBreakfast.isChecked();
 
-        if (!checkIn.matches("^\\d{4}-\\d{2}-\\d{2}$") || !checkOut.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
-            Toast.makeText(requireContext(), "Please enter valid check-in and check-out dates.", Toast.LENGTH_SHORT).show();
+        if (!validateInputs(checkIn, checkOut, guests)) {
             return;
         }
 
