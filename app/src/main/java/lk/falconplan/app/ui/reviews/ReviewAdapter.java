@@ -66,7 +66,7 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
                     ? " • " + new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(item.getCreatedAt()))
                     : "";
 
-            txtReviewerName.setText(String.format(Locale.US, "Verified Traveler%s", dateSuffix));
+            txtReviewerName.setText(String.format(Locale.US, "Booking-Linked Review%s", dateSuffix));
             txtRatingStars.setText(String.format(Locale.US, "★ %d.0", item.getRating()));
             txtReviewText.setText(item.getReviewText());
         }
