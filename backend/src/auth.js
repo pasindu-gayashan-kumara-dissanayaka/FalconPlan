@@ -101,13 +101,25 @@ async function requireFirebaseUser(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.auth || !req.auth.claims || req.auth.claims.admin !== true) {
-    return res.status(403).json({
-      error: 'Administrator permissions required',
-      code: 'FORBIDDEN'
-    });
+  const designatedAdminUids = [
+    '3r43mqbJzSc9FGBThq4lMAvoEuE3'
+  ];
+  const designatedAdminEmails = [
+    'it23681224@my.sliit.lk'
+  ];
+
+  const callerUid = req.auth ? req.auth.uid : '';
+  const callerEmail = (req.auth && req.auth.claims && req.auth.claims.email) ? String(req.auth.claims.email).toLowerCase() : '';
+  const hasCustomClaim = (req.auth && req.auth.claims && req.auth.claims.admin === true);
+
+  if (hasCustomClaim || designatedAdminUids.includes(callerUid) || designatedAdminEmails.includes(callerEmail)) {
+    return next();
   }
-  next();
+
+  return res.status(403).json({
+    error: 'Administrator permissions required',
+    code: 'FORBIDDEN'
+  });
 }
 
 function requireRole(allowedModes) {
