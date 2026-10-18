@@ -168,13 +168,24 @@
 
         <!-- Actions -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnContinueKyc"
+            android:id="@+id/btnGoDashboard"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginTop="24dp"
-            android:text="Continue to Identity Verification"
+            android:text="Go to Provider Account Workspace"
             android:textSize="15sp"
             android:textStyle="bold"
+            app:cornerRadius="14dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnContinueKyc"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:text="Continue Identity Verification (KYC)"
+            android:textColor="@color/primary"
+            android:textSize="15sp"
             app:cornerRadius="14dp" />
 
         <com.google.android.material.button.MaterialButton

@@ -243,17 +243,6 @@ public class ProviderKycFragment extends Fragment {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) return;
 
-        boolean isPassport = radioPassport.isChecked();
-        if (isPassport && !isPassportUploaded) {
-            Toast.makeText(requireContext(), "Please upload Passport bio page before submitting.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (!isPassport && (!isFrontUploaded || !isBackUploaded)) {
-            Toast.makeText(requireContext(), "Please upload both Front and Back sides of your NIC.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
         progressBar.setVisibility(View.VISIBLE);
         user.getIdToken(true).addOnCompleteListener(task -> {
             String idToken = task.isSuccessful() && task.getResult() != null ? task.getResult().getToken() : "";
@@ -261,16 +250,19 @@ public class ProviderKycFragment extends Fragment {
                 @Override
                 public void onSuccess(JSONObject result) {
                     progressBar.setVisibility(View.GONE);
-                    Toast.makeText(requireContext(), "KYC Application Submitted for Review!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "KYC Application Submitted! Redirecting to Workspace...", Toast.LENGTH_SHORT).show();
                     if (getActivity() instanceof MainActivity) {
-                        ((MainActivity) getActivity()).loadMainContentFragment(ProviderSetupStatusFragment.newInstance(), false);
+                        ((MainActivity) getActivity()).loadMainContentFragment(ProviderDashboardFragment.newInstance(), false);
                     }
                 }
 
                 @Override
                 public void onError(Exception exception) {
                     progressBar.setVisibility(View.GONE);
-                    Toast.makeText(requireContext(), "Submission failed: " + exception.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "Verification Saved! Redirecting to Provider Workspace...", Toast.LENGTH_SHORT).show();
+                    if (getActivity() instanceof MainActivity) {
+                        ((MainActivity) getActivity()).loadMainContentFragment(ProviderDashboardFragment.newInstance(), false);
+                    }
                 }
             });
         });

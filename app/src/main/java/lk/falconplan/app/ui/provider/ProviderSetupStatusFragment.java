@@ -65,6 +65,15 @@ public class ProviderSetupStatusFragment extends Fragment {
 
         view.findViewById(R.id.btnBack).setOnClickListener(v -> requireActivity().getOnBackPressedDispatcher().onBackPressed());
 
+        View btnGoDashboard = view.findViewById(R.id.btnGoDashboard);
+        if (btnGoDashboard != null) {
+            btnGoDashboard.setOnClickListener(v -> {
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).loadMainContentFragment(ProviderDashboardFragment.newInstance(), false);
+                }
+            });
+        }
+
         view.findViewById(R.id.btnContinueKyc).setOnClickListener(v -> {
             if (getActivity() instanceof MainActivity) {
                 ((MainActivity) getActivity()).loadMainContentFragment(ProviderKycFragment.newInstance(), true);
