@@ -8,8 +8,11 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 import lk.falconplan.app.R;
 import lk.falconplan.app.data.model.ReviewItem;
@@ -59,8 +62,14 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
         }
 
         public void bind(ReviewItem item) {
-            txtReviewerName.setText("Verified Traveler");
-            txtRatingStars.setText("★ " + item.getRating() + ".0");
+            String formattedDate = "";
+            if (item.getCreatedAt() > 0) {
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+                formattedDate = " • " + sdf.format(new Date(item.getCreatedAt()));
+            }
+
+            txtReviewerName.setText("Verified Traveler" + formattedDate);
+            txtRatingStars.setText(String.format(Locale.US, "★ %d.0", item.getRating()));
             txtReviewText.setText(item.getReviewText());
         }
     }
