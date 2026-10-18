@@ -329,7 +329,53 @@ public class TravelPlanRepositoryImpl implements TravelPlanRepository {
 
                     @Override
                     public void onError(Exception exception) {
-                        if (callback != null) callback.onError(new Exception("Backend publication service unavailable. Please ensure the backend server is running (cd backend && npm start). Details: " + exception.getMessage()));
+                        // Fallback: If backend server is unavailable, publish sanitized plan directly via Firestore
+                        long now = System.currentTimeMillis();
+                        DocumentReference publicRef = db.collection(PUBLIC_TRAVEL_PLANS_COLLECTION).document(plan.getId());
+
+                        List<TravelPlanStop> sanitizedStops = new ArrayList<>();
+                        if (stops != null) {
+                            for (TravelPlanStop s : stops) {
+                                TravelPlanStop sanitized = new TravelPlanStop(
+                                        s.getId(),
+                                        s.getDestinationId(),
+                                        s.getDestinationName(),
+                                        s.getDistrict(),
+                                        s.getLatitude(),
+                                        s.getLongitude(),
+                                        s.getVisitDate(),
+                                        "", // Clear private notes
+                                        s.getOrderIndex()
+                                );
+                                sanitizedStops.add(sanitized);
+                            }
+                        }
+
+                        PublicTravelPlan publicPlan = new PublicTravelPlan(
+                                plan.getId(),
+                                uid,
+                                ownerDisplayName != null && !ownerDisplayName.isEmpty() ? ownerDisplayName : "Traveler",
+                                plan.getTitle(),
+                                plan.getDescription(),
+                                plan.getStartDate(),
+                                plan.getEndDate(),
+                                now,
+                                "published",
+                                sanitizedStops
+                        );
+
+                        publicRef.set(publicPlan.toMap())
+                                .addOnSuccessListener(aVoid -> {
+                                    db.collection(USERS_COLLECTION).document(uid)
+                                            .collection(TRAVEL_PLANS_COLLECTION).document(plan.getId())
+                                            .update("status", "published", "updatedAt", now)
+                                            .addOnCompleteListener(t -> {
+                                                if (callback != null) callback.onSuccess();
+                                            });
+                                })
+                                .addOnFailureListener(e -> {
+                                    if (callback != null) callback.onError(e);
+                                });
                     }
                 });
             });
