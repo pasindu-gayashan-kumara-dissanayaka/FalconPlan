@@ -229,6 +229,20 @@
                         app:icon="@drawable/ic_nav_profile"
                         app:iconGravity="textStart"
                         app:iconTint="@color/accent_orange_dark" />
+
+                    <!-- Admin KYC Reviews Action Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAdminKycReviews"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="10dp"
+                        android:text="Admin Host KYC Reviews"
+                        android:textColor="@color/accent_orange_dark"
+                        app:cornerRadius="12dp"
+                        app:icon="@drawable/ic_nav_profile"
+                        app:iconGravity="textStart"
+                        app:iconTint="@color/accent_orange_dark" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
