@@ -62,13 +62,11 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
         }
 
         public void bind(ReviewItem item) {
-            String formattedDate = "";
-            if (item.getCreatedAt() > 0) {
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-                formattedDate = " • " + sdf.format(new Date(item.getCreatedAt()));
-            }
+            String dateSuffix = item.getCreatedAt() > 0
+                    ? " • " + new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date(item.getCreatedAt()))
+                    : "";
 
-            txtReviewerName.setText("Verified Traveler" + formattedDate);
+            txtReviewerName.setText(String.format(Locale.US, "Verified Traveler%s", dateSuffix));
             txtRatingStars.setText(String.format(Locale.US, "★ %d.0", item.getRating()));
             txtReviewText.setText(item.getReviewText());
         }
